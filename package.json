@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "start": "bun server.ts",
     "test": "bun test tests/backend.test.ts",
-    "test:e2e": "playwright test tests/ui.spec.ts tests/auth-ui.spec.ts tests/sync.spec.ts"
+    "test:e2e": "playwright test tests/ui.spec.ts tests/auth-ui.spec.ts tests/sync.spec.ts tests/offline-ui.spec.ts"
   },
   "dependencies": {
     "react": "^19.1.0",
