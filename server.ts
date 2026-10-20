@@ -11,6 +11,8 @@ type Note = {
   content: string;
   folder: string;
   tags: string[];
+  icon: string;
+  cover: string;
   starred: boolean;
   updatedAt: number;
   version: number;
@@ -146,6 +148,16 @@ function validateNote(id: string, body: Record<string, unknown>) {
   ) {
     throw new HttpError(400, "Use up to 50 tags of 1–64 characters.");
   }
+  const icon = body.icon ?? "";
+  const cover = body.cover ?? "";
+  if (
+    typeof icon !== "string" ||
+    icon.length > 32 ||
+    typeof cover !== "string" ||
+    !/^[a-z0-9-]{0,40}$/.test(cover)
+  ) {
+    throw new HttpError(400, "Invalid page icon or cover.");
+  }
   if (
     typeof body.starred !== "boolean" ||
     (body.deleted !== undefined && typeof body.deleted !== "boolean")
@@ -158,6 +170,8 @@ function validateNote(id: string, body: Record<string, unknown>) {
     content,
     folder,
     tags: [...new Set(tags)] as string[],
+    icon,
+    cover,
     starred: body.starred,
     deleted: body.deleted ?? false,
     version: Number(body.version),
@@ -189,8 +203,18 @@ export function createApp(dbPath = Bun.env.DB_PATH ?? "/data/bedrock.sqlite") {
       PRIMARY KEY (user_id, id)
     );
   `);
+  // Page icons and covers arrived after the first release; add them to older databases.
+  const noteColumns = db
+    .query<{ name: string }, []>("PRAGMA table_info(notes)")
+    .all()
+    .map((column) => column.name);
+  for (const column of ["icon", "cover"])
+    if (!noteColumns.includes(column))
+      db.exec(
+        `ALTER TABLE notes ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`,
+      );
   const selectNote = db.query<DbNote, [string, string]>(
-    "SELECT id,title,content,folder,tags,starred,updated_at AS updatedAt,version,deleted FROM notes WHERE user_id = ? AND id = ?",
+    "SELECT id,title,content,folder,tags,icon,cover,starred,updated_at AS updatedAt,version,deleted FROM notes WHERE user_id = ? AND id = ?",
   );
   const rateLimits = new Map<string, { count: number; reset: number }>();
   let requests = 0;
@@ -345,7 +369,7 @@ export function createApp(dbPath = Bun.env.DB_PATH ?? "/data/bedrock.sqlite") {
           .query<
             DbNote,
             [string]
-          >("SELECT id,title,content,folder,tags,starred,updated_at AS updatedAt,version,deleted FROM notes WHERE user_id=? ORDER BY updated_at DESC")
+          >("SELECT id,title,content,folder,tags,icon,cover,starred,updated_at AS updatedAt,version,deleted FROM notes WHERE user_id=? ORDER BY updated_at DESC")
           .all(user.id);
         return json({ notes: rows.map(publicNote) });
       }
@@ -389,10 +413,10 @@ export function createApp(dbPath = Bun.env.DB_PATH ?? "/data/bedrock.sqlite") {
                 );
             }
             db.query(
-              `INSERT INTO notes(user_id,id,title,content,folder,tags,starred,updated_at,version,deleted)
-              VALUES (?,?,?,?,?,?,?,?,?,?)
+              `INSERT INTO notes(user_id,id,title,content,folder,tags,icon,cover,starred,updated_at,version,deleted)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
               ON CONFLICT(user_id,id) DO UPDATE SET title=excluded.title,content=excluded.content,
-              folder=excluded.folder,tags=excluded.tags,starred=excluded.starred,
+              folder=excluded.folder,tags=excluded.tags,icon=excluded.icon,cover=excluded.cover,starred=excluded.starred,
               updated_at=excluded.updated_at,version=excluded.version,deleted=excluded.deleted`,
             ).run(
               user.id,
@@ -401,6 +425,8 @@ export function createApp(dbPath = Bun.env.DB_PATH ?? "/data/bedrock.sqlite") {
               validated.content,
               validated.folder,
               JSON.stringify(validated.tags),
+              validated.icon,
+              validated.cover,
               Number(validated.starred),
               Date.now(),
               (existing?.version ?? 0) + 1,

@@ -256,12 +256,12 @@ export function Graph({
       className={`knowledge-graph${compact ? " knowledge-graph--compact" : ""}${dragging ? " knowledge-graph--dragging" : ""}`}
     >
       <style>{`
-      .knowledge-graph { --graph-node: #a7a7a7; --graph-active: #ffffff; --graph-edge: #535353; --graph-label: #8a8a8a; --graph-hover: #a88bfa; --graph-background: #1e1e1e; position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; user-select: none; }
+      .knowledge-graph { --graph-node: var(--graph-node-color); --graph-active: var(--accent); --graph-edge: var(--graph-edge-color); --graph-label: var(--muted); --graph-hover: var(--accent-text); --graph-background: var(--graph-surface); position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; user-select: none; }
       .knowledge-graph--compact { min-height: 140px; }
       .knowledge-graph svg { display: block; width: 100%; height: 100%; overflow: hidden; touch-action: none; cursor: grab; }
       .knowledge-graph--dragging svg, .knowledge-graph--dragging .graph-node { cursor: grabbing; }
       .knowledge-graph .graph-edge { stroke: var(--graph-edge); stroke-width: .65; opacity: .65; vector-effect: non-scaling-stroke; }
-      .knowledge-graph .graph-edge--active { stroke: #727272; opacity: .9; }
+      .knowledge-graph .graph-edge--active { stroke: var(--graph-edge-active); opacity: .9; }
       .knowledge-graph .graph-edge--hover { stroke: var(--graph-hover); opacity: .85; }
       .knowledge-graph .graph-node { cursor: pointer; outline: none; }
       .knowledge-graph .graph-dot { fill: var(--graph-node); }
@@ -271,14 +271,13 @@ export function Graph({
       .knowledge-graph .graph-focus { fill: none; stroke: var(--graph-hover); stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: 0; }
       .knowledge-graph .graph-node:focus-visible .graph-focus { opacity: 1; }
       .knowledge-graph .graph-label { fill: var(--graph-label); font-family: inherit; font-weight: 400; pointer-events: none; paint-order: stroke; stroke: var(--graph-background); stroke-width: 3px; stroke-linejoin: round; }
-      .knowledge-graph .graph-node--selected .graph-label { fill: #b3b3b3; }
+      .knowledge-graph .graph-node--selected .graph-label { fill: var(--text); }
       .knowledge-graph .graph-node--hovered .graph-label { fill: var(--graph-hover); }
       .knowledge-graph .graph-empty { position: absolute; bottom: 22px; left: 24px; right: 24px; margin: 0; color: var(--graph-label); text-align: center; font-size: 12px; line-height: 1.6; pointer-events: none; }
       .knowledge-graph .graph-empty code { color: var(--graph-hover); font-size: inherit; }
       .knowledge-graph--compact .graph-empty { font-size: 10px; bottom: 8px; }
-      [data-theme="light"] .knowledge-graph { --graph-node: #858585; --graph-active: #333333; --graph-edge: #cccccc; --graph-label: #8a8a8a; --graph-hover: #7852ee; --graph-background: #ffffff; }
-      [data-theme="light"] .knowledge-graph .graph-node--selected .graph-label { fill: #555555; }
-      [data-theme="light"] .knowledge-graph .graph-edge--active { stroke: #aaaaaa; }
+      .knowledge-graph .graph-node--selected .graph-dot { filter: drop-shadow(0 0 5px var(--accent)); }
+      .knowledge-graph .graph-dot { transition: fill .15s ease; }
     `}</style>
       <svg
         ref={svg}

@@ -176,11 +176,64 @@ test("folders, bookmarks, tags, outline and links navigate the vault", async ({
   ).toBeVisible();
 });
 
+test("pages take an icon, a cover and a folder from their properties", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(base);
+  await page.getByRole("button", { name: "Create note", exact: true }).click();
+  const newNote = page.getByRole("dialog", { name: "New note", exact: true });
+  await newNote.getByLabel("Note title", { exact: true }).fill("Styled page");
+  await newNote
+    .getByRole("button", { name: "Create note", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Add icon", exact: true }).click();
+  await page.getByRole("button", { name: "Change icon", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Choose an icon" })
+    .getByRole("button", { name: "Use 🌿", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Change icon", exact: true }),
+  ).toHaveText("🌿");
+  await page.getByRole("button", { name: "Add cover", exact: true }).click();
+  await page.locator(".page-cover").hover();
+  await page.getByRole("button", { name: "Change cover", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Choose a cover" })
+    .getByRole("button", { name: "Nebula cover", exact: true })
+    .click();
+  await page.getByLabel("Folder", { exact: true }).selectOption("Projects");
+  await expect(
+    page.locator(".doc-location").getByRole("button", { name: "Projects" }),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel("Note title", { exact: true })).toBeVisible();
+  await page.keyboard.press("Control+k");
+  const quickSwitcher = page.getByRole("dialog", {
+    name: "Quick switcher",
+    exact: true,
+  });
+  await quickSwitcher.getByLabel("Search your vault").fill("Styled page");
+  await quickSwitcher.getByLabel("Search your vault").press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Change icon", exact: true }),
+  ).toHaveText("🌿");
+  await expect(page.locator(".page-cover")).toHaveAttribute(
+    "style",
+    /#1e1b4b|rgb\(30, 27, 75\)/,
+  );
+  await expect(page.getByLabel("Folder", { exact: true })).toHaveValue(
+    "Projects",
+  );
+});
+
 test("settings apply and persist theme and editor preferences", async ({
   page,
 }) => {
   await page.goto(base);
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.keyboard.press("Control+p");
   const commands = page.getByRole("dialog", {
     name: "Command palette",
@@ -189,9 +242,11 @@ test("settings apply and persist theme and editor preferences", async ({
   await commands.getByLabel("Search commands").fill("Open settings");
   await commands.getByLabel("Search commands").press("Enter");
   const settings = page.getByRole("dialog", { name: "Settings", exact: true });
-  await expect(settings.getByLabel("Base color scheme")).toHaveValue("dark");
-  await settings.getByLabel("Base color scheme").selectOption("light");
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(settings.getByLabel("Base color scheme")).toHaveValue("system");
+  await settings.getByLabel("Base color scheme").selectOption("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await settings.getByRole("radio", { name: "Green", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "green");
   await settings
     .locator(".settings-nav")
     .getByRole("button", { name: "Editor", exact: true })
@@ -222,12 +277,13 @@ test("settings apply and persist theme and editor preferences", async ({
   await expect(page.locator(".app")).toHaveClass(/wide-editor/);
 
   await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "green");
   await page
     .locator(".sidebar")
     .getByRole("button", { name: "Settings", exact: true })
     .click();
-  await expect(settings.getByLabel("Base color scheme")).toHaveValue("light");
+  await expect(settings.getByLabel("Base color scheme")).toHaveValue("dark");
   await settings
     .locator(".settings-nav")
     .getByRole("button", { name: "Editor", exact: true })
@@ -268,7 +324,7 @@ test("settings apply and persist theme and editor preferences", async ({
     .getByRole("button", { name: "About", exact: true })
     .click();
   await expect(settings.locator(".settings-version")).toContainText(
-    "Bedrock 2",
+    "Bedrock 3",
   );
 });
 

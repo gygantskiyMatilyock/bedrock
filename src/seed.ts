@@ -18,7 +18,16 @@ const make = (
   version: 0,
   deleted: false,
 });
-export const seed: Note[] = [
+const looks: Record<string, [string, string]> = {
+  welcome: ["🪨", "aurora"],
+  noticing: ["🔭", ""],
+  "second-brain": ["🧠", "lagoon"],
+  learn: ["🌱", ""],
+  rituals: ["🕯️", "ember"],
+  reading: ["📚", ""],
+  project: ["🛠️", "meadow"],
+};
+const seedNotes: Note[] = [
   make(
     "welcome",
     "A place for your thoughts",
@@ -168,3 +177,7 @@ Start with [[Creative rituals]] and make room for [[Things I want to learn]].`,
     ["projects"],
   ),
 ];
+export const seed: Note[] = seedNotes.map((note) => {
+  const [icon, cover] = looks[note.id] ?? ["", ""];
+  return { ...note, icon, cover };
+});

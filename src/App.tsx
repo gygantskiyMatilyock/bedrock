@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -10,21 +9,20 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
+  Clock3,
   Cloud,
-  Command,
   Copy,
   FileText,
   Folder,
   FolderOpen,
   GitBranch,
   Hash,
-  LayoutGrid,
+  ImagePlus,
   Link2,
   List,
   Loader2,
   Maximize2,
   Menu,
-  Moon,
   MoreHorizontal,
   Network,
   PanelLeft,
@@ -32,20 +30,20 @@ import {
   Pencil,
   Plus,
   Search,
-  Settings2,
+  Shuffle,
+  SmilePlus,
   Sparkles,
   Star,
-  Sun,
   Trash2,
   Upload,
   X,
   CalendarDays,
-  LogOut,
   Bold,
   Italic,
   Heading2,
   ListTodo,
   Code,
+  Quote,
   WifiOff,
   Files,
   FilePlus2,
@@ -57,7 +55,9 @@ import {
   Bookmark,
   Settings,
   Terminal,
-  SlidersHorizontal,
+  Home,
+  Moon,
+  Sun,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -66,118 +66,16 @@ import { seed } from "./seed";
 import { useVault } from "./useVault";
 import Graph from "./Graph";
 import SettingsPanel from "./SettingsPanel";
+import { covers, coverKeys, coverStyle, emojis, randomCover } from "./covers";
+import {
+  BrandMark,
+  IconButton,
+  Modal,
+  NoteIcon,
+  editedLabel,
+  greeting,
+} from "./ui";
 
-function Rock({ small = false }: { small?: boolean }) {
-  return (
-    <svg
-      width={small ? 24 : 31}
-      height={small ? 28 : 35}
-      viewBox="0 0 34 38"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path d="m5 27 7-22 13 3 6 21-14 6Z" fill="currentColor" />
-      <path
-        d="m12 5 5 30L25 8M5 27 25 8"
-        stroke="var(--logo-line)"
-        strokeWidth="1.4"
-      />
-    </svg>
-  );
-}
-function IconButton({
-  children,
-  label,
-  onClick,
-  active = false,
-}: {
-  children: ReactNode;
-  label: string;
-  onClick: () => void;
-  active?: boolean;
-}) {
-  return (
-    <button
-      className={"icon-button " + (active ? "active" : "")}
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-}
-function Modal({
-  title,
-  children,
-  onClose,
-  wide = false,
-  className = "",
-}: {
-  title: string;
-  children: ReactNode;
-  onClose: () => void;
-  wide?: boolean;
-  className?: string;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const old = document.activeElement as HTMLElement;
-    const el = ref.current;
-    (
-      el?.querySelector<HTMLElement>("input,textarea,select") ||
-      el?.querySelector<HTMLElement>("button")
-    )?.focus();
-    const fn = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "Tab") {
-        const focusables = Array.from(
-          el?.querySelectorAll<HTMLElement>(
-            "button,input,textarea,select,a[href]",
-          ) || [],
-        ).filter((x) => !x.hasAttribute("disabled"));
-        const first = focusables[0],
-          last = focusables.at(-1);
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last?.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first?.focus();
-        }
-      }
-    };
-    document.addEventListener("keydown", fn);
-    return () => {
-      document.removeEventListener("keydown", fn);
-      old?.focus();
-    };
-  }, []);
-  return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className={"modal " + (wide ? "wide " : "") + className}
-      >
-        <div className="modal-heading">
-          <h2>{title}</h2>
-          <IconButton label="Close dialog" onClick={onClose}>
-            <X size={18} />
-          </IconButton>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
 const folders = [
   "Start here",
   "Ideas",
@@ -197,6 +95,10 @@ function download(name: string, content: string, type = "text/markdown") {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+const plain = (content: string) =>
+  content.replace(/[#*>`\[\]_~-]/g, "").replace(/\s+/g, " ").trim();
+const THEME_KEY = "bedrock-theme";
+const ACCENT_KEY = "bedrock-accent";
 
 export default function App() {
   const vault = useVault(seed);
@@ -234,14 +136,19 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [authError, setAuthError] = useState("");
   const [menu, setMenu] = useState(false);
+  const [picker, setPicker] = useState<"icon" | "cover" | null>(null);
   const [toast, setToast] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newFolder, setNewFolder] = useState("Ideas");
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("bedrock-theme-obsidian") || "dark",
+    () => localStorage.getItem(THEME_KEY) || "system",
+  );
+  const [accent, setAccent] = useState(
+    () => localStorage.getItem(ACCENT_KEY) || "violet",
   );
   const [newTag, setNewTag] = useState("");
   const [zoom, setZoom] = useState(1);
+  const [now, setNow] = useState(Date.now());
   const [sidebarMode, setSidebarMode] = useState<
     "files" | "search" | "bookmarks" | "tags"
   >("files");
@@ -255,7 +162,7 @@ export default function App() {
     () => localStorage.getItem("bedrock-readable") !== "false",
   );
   const [fontSize, setFontSize] = useState(
-    () => Number(localStorage.getItem("bedrock-fontsize")) || 14,
+    () => Number(localStorage.getItem("bedrock-fontsize")) || 16,
   );
   const [spellcheck, setSpellcheck] = useState(
     () => localStorage.getItem("bedrock-spellcheck") !== "false",
@@ -287,6 +194,10 @@ export default function App() {
     localStorage.setItem("bedrock-fontsize", String(fontSize));
     localStorage.setItem("bedrock-spellcheck", String(spellcheck));
   }, [readableWidth, fontSize, spellcheck]);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
   const toggleSidebar = () => {
     if (window.innerWidth <= 700) setSidebar((v) => !v);
     else setSidebarHidden((v) => !v);
@@ -322,7 +233,11 @@ export default function App() {
     document.fonts.ready.then(resize);
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
-  }, [note?.title, view]);
+  }, [note?.title, view, note?.icon, note?.cover]);
+  useEffect(() => {
+    article.current?.scrollTo({ top: 0 });
+    setPicker(null);
+  }, [note?.id]);
   const openNote = (id: string) => {
     if (history.current[historyPosition.current] !== id) {
       history.current = history.current.slice(0, historyPosition.current + 1);
@@ -352,6 +267,8 @@ export default function App() {
       content,
       folder,
       tags: [],
+      icon: "",
+      cover: "",
       starred: false,
       updatedAt: Date.now(),
       version: 0,
@@ -372,17 +289,35 @@ export default function App() {
       (n) => n.folder === "Daily notes" && n.title === title,
     );
     if (existing) openNote(existing.id);
-    else
-      create(
+    else {
+      const n = create(
         title,
         "Daily notes",
         "## On my mind\n\n\n\n## A little gratitude\n\n\n\n## One thing for today\n\n- [ ] ",
       );
+      saveNote({ ...n, icon: "📅" });
+    }
   };
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem("bedrock-theme-obsidian", theme);
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const resolved =
+        theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      document.documentElement.dataset.theme = resolved;
+      document
+        .querySelector('meta[name="theme-color"]')
+        ?.setAttribute("content", resolved === "dark" ? "#191919" : "#ffffff");
+    };
+    apply();
+    localStorage.setItem(THEME_KEY, theme);
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
   }, [theme]);
+  useEffect(() => {
+    document.documentElement.dataset.accent = accent;
+    localStorage.setItem(ACCENT_KEY, accent);
+  }, [accent]);
+  const isDark = () => document.documentElement.dataset.theme === "dark";
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (
@@ -408,6 +343,7 @@ export default function App() {
       }
       if (e.key === "Escape") {
         setMenu(false);
+        setPicker(null);
         setSidebar(false);
         setMobilePanel(false);
         setFocus(false);
@@ -426,6 +362,14 @@ export default function App() {
           n.content.toLowerCase().includes(`[[${note.title.toLowerCase()}]]`),
       )
     : [];
+  const unlinked = note
+    ? live.filter(
+        (n) =>
+          n.id !== note.id &&
+          !backlinks.some((b) => b.id === n.id) &&
+          n.content.toLowerCase().includes(note.title.toLowerCase()),
+      )
+    : [];
   const localGraphNotes = note
     ? live.filter((candidate) => {
         if (candidate.id === note.id) return true;
@@ -442,7 +386,10 @@ export default function App() {
       })
     : [];
   const headings = note
-    ? [...note.content.matchAll(/^#{1,3} (.+)$/gm)].map((m) => m[1])
+    ? [...note.content.matchAll(/^(#{1,3}) (.+)$/gm)].map((m) => ({
+        level: m[1].length,
+        text: m[2],
+      }))
     : [];
   const results = useMemo(
     () =>
@@ -452,13 +399,16 @@ export default function App() {
             .toLowerCase()
             .includes(query.toLowerCase()),
         )
+        .sort((a, b) => b.updatedAt - a.updatedAt)
         .slice(0, 14),
     [notes, query],
   );
+  const recent = [...live].sort((a, b) => b.updatedAt - a.updatedAt);
   const commandActions = [
     {
       title: "Create new note",
       hint: "Ctrl N",
+      icon: <FilePlus2 size={16} />,
       run: () => {
         setNewTitle("");
         setModal("new");
@@ -467,6 +417,7 @@ export default function App() {
     {
       title: "Open quick switcher",
       hint: "Ctrl O",
+      icon: <Search size={16} />,
       run: () => {
         setQuery("");
         setModal("search");
@@ -475,6 +426,7 @@ export default function App() {
     {
       title: "Daily notes: Open today’s daily note",
       hint: "",
+      icon: <CalendarDays size={16} />,
       run: () => {
         setModal(null);
         daily();
@@ -483,23 +435,40 @@ export default function App() {
     {
       title: "Graph view: Open graph view",
       hint: "",
+      icon: <Network size={16} />,
       run: () => {
         setView("graph");
         setModal(null);
       },
     },
-    { title: "Open settings", hint: "", run: () => setModal("settings") },
+    {
+      title: "Open settings",
+      hint: "",
+      icon: <Settings size={16} />,
+      run: () => setModal("settings"),
+    },
     {
       title: "Toggle reading view",
       hint: "Ctrl E",
+      icon: <BookOpen size={16} />,
       run: () => {
         setEditing((v) => !v);
         setModal(null);
       },
     },
     {
+      title: "Toggle dark mode",
+      hint: "",
+      icon: <Moon size={16} />,
+      run: () => {
+        setTheme(isDark() ? "light" : "dark");
+        setModal(null);
+      },
+    },
+    {
       title: "Toggle left sidebar",
       hint: "",
+      icon: <PanelLeft size={16} />,
       run: () => {
         toggleSidebar();
         setModal(null);
@@ -508,6 +477,7 @@ export default function App() {
     {
       title: "Toggle right sidebar",
       hint: "",
+      icon: <PanelRight size={16} />,
       run: () => {
         setRightPanel((v) => !v);
         setModal(null);
@@ -516,6 +486,7 @@ export default function App() {
     {
       title: "Files: Show all notes",
       hint: "",
+      icon: <Files size={16} />,
       run: () => {
         setView("collection");
         setFilter("All notes");
@@ -525,6 +496,7 @@ export default function App() {
     {
       title: "Files: Import Markdown files",
       hint: "",
+      icon: <Upload size={16} />,
       run: () => importer.current?.click(),
     },
   ].filter((command) =>
@@ -565,6 +537,11 @@ export default function App() {
     if (n) openNote(n.id);
     else create(title);
   };
+  const showCollection = (next: string) => {
+    setFilter(next);
+    setView("collection");
+    setSidebar(false);
+  };
   const markdown =
     note?.content.replace(
       /\[\[([^\]\n]+)\]\]/g,
@@ -589,6 +566,20 @@ export default function App() {
       el.setSelectionRange(start + before.length, end + before.length);
     });
   };
+  const formatLine = (prefix: string) => {
+    const el = editor.current;
+    if (!el) return;
+    const start = note.content.lastIndexOf("\n", el.selectionStart - 1) + 1;
+    update({
+      content:
+        note.content.slice(0, start) + prefix + note.content.slice(start),
+    });
+    const caret = el.selectionStart + prefix.length;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(caret, caret);
+    });
+  };
   const syncLabel =
     syncStatus === "synced"
       ? "All changes synced"
@@ -601,13 +592,13 @@ export default function App() {
             : "Saved on this device";
   const syncIcon =
     syncStatus === "syncing" ? (
-      <Loader2 size={14} className="spin" />
+      <Loader2 size={13} className="spin" />
     ) : syncStatus === "offline" ? (
-      <WifiOff size={14} />
+      <WifiOff size={13} />
     ) : syncStatus === "synced" ? (
-      <Cloud size={15} />
+      <Cloud size={14} />
     ) : (
-      <Check size={14} />
+      <Check size={13} />
     );
   const exportNote = () => {
     if (note)
@@ -633,6 +624,8 @@ export default function App() {
         content: heading ? content.replace(/^# .+\n\n?/, "") : content,
         folder: "Resources",
         tags: [],
+        icon: "",
+        cover: "",
         starred: false,
         updatedAt: Date.now(),
         version: 0,
@@ -650,16 +643,25 @@ export default function App() {
     setPanelMode(mode);
     setMobilePanel(window.innerWidth <= 900);
   };
+  const panelTitle =
+    panelMode === "graph"
+      ? "Local graph"
+      : panelMode === "outline"
+        ? "Outline"
+        : panelMode === "backlinks"
+          ? "Backlinks"
+          : "Outgoing links";
   const renderNoteOptions = () =>
     note && (
       <div className="menu-anchor">
         <IconButton label="Note options" onClick={() => setMenu(!menu)}>
-          <MoreHorizontal size={19} />
+          <MoreHorizontal size={18} />
         </IconButton>
         {menu && (
           <>
             <div className="menu-scrim" onClick={() => setMenu(false)} />
             <div className="dropdown">
+              <div className="dropdown-label">Page</div>
               <button
                 onClick={() => {
                   update({ starred: !note.starred });
@@ -696,13 +698,19 @@ export default function App() {
                 <Link2 size={15} />
                 Show backlinks
               </button>
+              <div className="dropdown-separator" />
               <button onClick={exportNote}>
                 <ArrowDownToLine size={15} />
                 Export Markdown
               </button>
               <button
                 onClick={() => {
-                  create(note.title + " (copy)", note.folder, note.content);
+                  const copy = create(
+                    note.title + " (copy)",
+                    note.folder,
+                    note.content,
+                  );
+                  saveNote({ ...copy, icon: note.icon, cover: note.cover });
                   setMenu(false);
                 }}
               >
@@ -720,6 +728,7 @@ export default function App() {
                 <Copy size={15} />
                 Copy Markdown
               </button>
+              <div className="dropdown-separator" />
               <button
                 className="danger"
                 onClick={() => {
@@ -731,11 +740,29 @@ export default function App() {
                 <Trash2 size={15} />
                 Move to trash
               </button>
+              <div className="dropdown-meta">
+                {note.content.trim().split(/\s+/).filter(Boolean).length} words
+                · Edited {editedLabel(note.updatedAt, now)}
+              </div>
             </div>
           </>
         )}
       </div>
     );
+  const sidebarRow = (n: Note, className: string) => (
+    <button
+      className={
+        className +
+        (note?.id === n.id && view === "note" ? " current" : "")
+      }
+      key={n.id}
+      onClick={() => openNote(n.id)}
+      title={n.title}
+    >
+      <NoteIcon note={n} size={15} />
+      <span>{n.title}</span>
+    </button>
+  );
   return (
     <div
       className={
@@ -753,13 +780,76 @@ export default function App() {
         <div className="mobile-scrim" onClick={() => setSidebar(false)} />
       )}
       <aside className={"sidebar " + (sidebar ? "mobile-open" : "")}>
-        <div className="sidebar-header">
+        <div className="sidebar-top">
+          <button
+            className="vault-switch"
+            title="Vault settings"
+            onClick={() => setModal("settings")}
+          >
+            <BrandMark />
+            <span className="vault-name">Bedrock</span>
+            <ChevronsUpDown size={13} />
+          </button>
+          <IconButton label="Collapse sidebar" onClick={toggleSidebar}>
+            <PanelLeft size={16} />
+          </IconButton>
+        </div>
+        <nav className="sidebar-actions" aria-label="Workspace">
+          <button
+            className="nav-row"
+            aria-label="Search notes"
+            onClick={() => {
+              setQuery("");
+              setModal("search");
+            }}
+          >
+            <Search size={16} />
+            <span>Search</span>
+            <kbd>⌘K</kbd>
+          </button>
+          <button
+            className={
+              "nav-row " +
+              (view === "collection" && filter === "All notes" ? "active" : "")
+            }
+            aria-label="All notes"
+            onClick={() => showCollection("All notes")}
+          >
+            <Home size={16} />
+            <span>All notes</span>
+            <small>{live.length}</small>
+          </button>
+          <button className="nav-row" aria-label="Daily note" onClick={daily}>
+            <CalendarDays size={16} />
+            <span>Daily note</span>
+          </button>
+          <button
+            className={"nav-row " + (view === "graph" ? "active" : "")}
+            aria-label="Graph view"
+            onClick={() => {
+              setView("graph");
+              setSidebar(false);
+            }}
+          >
+            <Network size={16} />
+            <span>Graph view</span>
+          </button>
+          <button
+            className="nav-row"
+            aria-label="Import Markdown files"
+            onClick={() => importer.current?.click()}
+          >
+            <Upload size={16} />
+            <span>Import</span>
+          </button>
+        </nav>
+        <div className="sidebar-header" role="tablist" aria-label="Sidebar">
           <IconButton
             label="Files"
             active={sidebarMode === "files"}
             onClick={() => setSidebarMode("files")}
           >
-            <Files size={17} />
+            <Files size={15} />
           </IconButton>
           <IconButton
             label="Find anything"
@@ -769,70 +859,30 @@ export default function App() {
               setQuery("");
             }}
           >
-            <Search size={17} />
+            <Search size={15} />
           </IconButton>
           <IconButton
             label="Bookmarks"
             active={sidebarMode === "bookmarks"}
             onClick={() => setSidebarMode("bookmarks")}
           >
-            <Bookmark size={17} />
+            <Bookmark size={15} />
           </IconButton>
           <IconButton
             label="Tags"
             active={sidebarMode === "tags"}
             onClick={() => setSidebarMode("tags")}
           >
-            <Tags size={17} />
-          </IconButton>
-          <IconButton label="Collapse sidebar" onClick={toggleSidebar}>
-            <PanelLeft size={16} />
-          </IconButton>
-        </div>
-        <div className="sidebar-tools">
-          <IconButton
-            label="New note"
-            onClick={() => {
-              setNewTitle("");
-              setModal("new");
-            }}
-          >
-            <FilePlus2 size={17} />
-          </IconButton>
-          <IconButton
-            label="New folder"
-            onClick={() => {
-              setFolderDraft("");
-              setModal("folder");
-            }}
-          >
-            <FolderPlus size={17} />
-          </IconButton>
-          <IconButton
-            label="Sort files by name"
-            active={sortByName}
-            onClick={() => setSortByName((v) => !v)}
-          >
-            <ArrowDownAZ size={17} />
-          </IconButton>
-          <IconButton
-            label="Collapse all folders"
-            onClick={() =>
-              setCollapsed((c) =>
-                c.length === allFolders.length ? [] : allFolders,
-              )
-            }
-          >
-            <ChevronsUp size={17} />
+            <Tags size={15} />
           </IconButton>
         </div>
         {sidebarMode === "search" && (
           <div className="sidebar-search">
-            <Search size={15} />
+            <Search size={14} />
             <input
               aria-label="Search your vault"
               autoFocus
-              placeholder="Search..."
+              placeholder="Search notes…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -846,72 +896,127 @@ export default function App() {
         <div className="sidebar-scroll">
           {sidebarMode === "files" && (
             <>
-              {allFolders.map((folder) => {
-                const items = live
-                  .filter((n) => n.folder === folder)
-                  .sort((a, b) =>
-                    sortByName ? a.title.localeCompare(b.title) : 0,
-                  );
-                const isCollapsed = collapsed.includes(folder);
-                return (
-                  <div key={folder} className="folder-group">
-                    <button
-                      className="folder-row"
+              {live.some((n) => n.starred) && (
+                <div className="sidebar-section">
+                  <div className="section-label">Bookmarked</div>
+                  {live
+                    .filter((n) => n.starred)
+                    .map((n) => sidebarRow(n, "favorite-note"))}
+                </div>
+              )}
+              <div className="sidebar-section">
+                <div className="section-label with-tools">
+                  <span>Folders</span>
+                  <div className="sidebar-tools">
+                    <IconButton
+                      label="New note"
+                      onClick={() => {
+                        setNewTitle("");
+                        setModal("new");
+                      }}
+                    >
+                      <FilePlus2 size={14} />
+                    </IconButton>
+                    <IconButton
+                      label="New folder"
+                      onClick={() => {
+                        setFolderDraft("");
+                        setModal("folder");
+                      }}
+                    >
+                      <FolderPlus size={14} />
+                    </IconButton>
+                    <IconButton
+                      label="Sort files by name"
+                      active={sortByName}
+                      onClick={() => setSortByName((v) => !v)}
+                    >
+                      <ArrowDownAZ size={14} />
+                    </IconButton>
+                    <IconButton
+                      label="Collapse all folders"
                       onClick={() =>
                         setCollapsed((c) =>
-                          c.includes(folder)
-                            ? c.filter((f) => f !== folder)
-                            : [...c, folder],
+                          c.length === allFolders.length ? [] : allFolders,
                         )
                       }
                     >
-                      {isCollapsed ? (
-                        <ChevronRight size={13} />
-                      ) : (
-                        <ChevronDown size={13} />
-                      )}
-                      <span>{folder}</span>
-                    </button>
-                    {!isCollapsed && (
-                      <div className="folder-children">
-                        {items.map((n) => (
-                          <button
-                            className={
-                              "tree-note " +
-                              (note?.id === n.id && view === "note"
-                                ? "current"
-                                : "")
-                            }
-                            key={n.id}
-                            onClick={() => openNote(n.id)}
-                            title={n.title}
-                          >
-                            <span>{n.title}</span>
-                          </button>
-                        ))}
-                        {!items.length && (
-                          <button
-                            className="empty-folder"
-                            onClick={() => {
-                              setNewFolder(folder);
-                              setNewTitle("");
-                              setModal("new");
-                            }}
-                          >
-                            New note
-                          </button>
-                        )}
-                      </div>
-                    )}
+                      <ChevronsUp size={14} />
+                    </IconButton>
                   </div>
-                );
-              })}
+                </div>
+                {allFolders.map((folder) => {
+                  const items = live
+                    .filter((n) => n.folder === folder)
+                    .sort((a, b) =>
+                      sortByName ? a.title.localeCompare(b.title) : 0,
+                    );
+                  const isCollapsed = collapsed.includes(folder);
+                  return (
+                    <div key={folder} className="folder-group">
+                      <div className="folder-line">
+                        <button
+                          className="folder-row"
+                          aria-expanded={!isCollapsed}
+                          onClick={() =>
+                            setCollapsed((c) =>
+                              c.includes(folder)
+                                ? c.filter((f) => f !== folder)
+                                : [...c, folder],
+                            )
+                          }
+                        >
+                          <ChevronRight
+                            size={13}
+                            className={"folder-chevron" + (isCollapsed ? "" : " open")}
+                          />
+                          {isCollapsed ? (
+                            <Folder size={15} className="folder-glyph" />
+                          ) : (
+                            <FolderOpen size={15} className="folder-glyph" />
+                          )}
+                          <span>{folder}</span>
+                        </button>
+                        <button
+                          className="folder-add"
+                          aria-label={"Add a note to " + folder}
+                          title={"Add a note to " + folder}
+                          onClick={() => {
+                            setNewFolder(folder);
+                            setNewTitle("");
+                            setModal("new");
+                          }}
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                      {!isCollapsed && (
+                        <div className="folder-children">
+                          {items.map((n) => sidebarRow(n, "tree-note"))}
+                          {!items.length && (
+                            <button
+                              className="empty-folder"
+                              onClick={() => {
+                                setNewFolder(folder);
+                                setNewTitle("");
+                                setModal("new");
+                              }}
+                            >
+                              New note
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
           {sidebarMode === "search" && (
             <div className="quick-search-results">
               <div className="section-label">
-                {results.length} matching files
+                {results.length} matching {results.length === 1 ? "note" : "notes"}
               </div>
               {results.map((n) => (
                 <button
@@ -919,10 +1024,11 @@ export default function App() {
                   key={n.id}
                   onClick={() => openNote(n.id)}
                 >
-                  <span>{n.title}</span>
-                  <small>
-                    {n.content.replace(/[#*>`\[\]]/g, "").slice(0, 90)}
-                  </small>
+                  <span>
+                    <NoteIcon note={n} size={14} />
+                    {n.title}
+                  </span>
+                  <small>{plain(n.content).slice(0, 90)}</small>
                 </button>
               ))}
               {!results.length && (
@@ -931,37 +1037,21 @@ export default function App() {
             </div>
           )}
           {sidebarMode === "bookmarks" && (
-            <>
+            <div className="sidebar-section">
               <div className="section-label">Bookmarks</div>
               {live
                 .filter((n) => n.starred)
-                .map((n) => (
-                  <button
-                    key={n.id}
-                    className="sidebar-note"
-                    onClick={() => openNote(n.id)}
-                  >
-                    <FileText size={14} />
-                    <span>{n.title}</span>
-                  </button>
-                ))}
+                .map((n) => sidebarRow(n, "sidebar-note"))}
               {!live.some((n) => n.starred) && (
                 <p className="detail-empty">Bookmark a note from its menu.</p>
               )}
-            </>
+            </div>
           )}
           {sidebarMode === "tags" && (
             <div className="tag-list">
               <div className="section-label">Tags</div>
               {[...new Set(live.flatMap((n) => n.tags))].sort().map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => {
-                    setFilter("#" + tag);
-                    setView("collection");
-                    setSidebar(false);
-                  }}
-                >
+                <button key={tag} onClick={() => showCollection("#" + tag)}>
                   <Hash size={14} />
                   <span>{tag}</span>
                   <small>
@@ -972,58 +1062,31 @@ export default function App() {
             </div>
           )}
         </div>
-        <div className="sidebar-actions">
-          <IconButton
-            label="All notes"
-            active={view === "collection"}
-            onClick={() => {
-              setView("collection");
-              setFilter("All notes");
-              setSidebar(false);
-            }}
-          >
-            <Files size={17} />
-          </IconButton>
-          <IconButton label="Daily note" onClick={daily}>
-            <CalendarDays size={17} />
-          </IconButton>
-          <IconButton
-            label="Graph view"
-            active={view === "graph"}
-            onClick={() => {
-              setView("graph");
-              setSidebar(false);
-            }}
-          >
-            <Network size={17} />
-          </IconButton>
-          <IconButton
-            label="Import Markdown files"
-            onClick={() => importer.current?.click()}
-          >
-            <Upload size={17} />
-          </IconButton>
-        </div>
         <div className="sidebar-footer">
           <button
-            className="vault-switch"
-            title="Vault settings"
-            onClick={() => setModal("settings")}
+            className="account-chip"
+            title={syncLabel}
+            onClick={() => setModal(user ? "settings" : "auth")}
           >
-            <span>Bedrock</span>
-            <ChevronsUpDown size={14} />
+            <span className="avatar" aria-hidden="true">
+              {(user?.name || "G").slice(0, 1).toUpperCase()}
+            </span>
+            <span className="account-text">
+              <strong>{user ? user.name : "Guest vault"}</strong>
+              <small>{user ? syncLabel : "Sign in to sync"}</small>
+            </span>
           </button>
           <IconButton
             label="Sync"
             onClick={() => setModal(user ? "settings" : "auth")}
           >
-            <Cloud size={16} />
+            <Cloud size={15} />
           </IconButton>
           <IconButton label="Help" onClick={() => setModal("help")}>
-            <CircleHelp size={16} />
+            <CircleHelp size={15} />
           </IconButton>
           <IconButton label="Settings" onClick={() => setModal("settings")}>
-            <Settings size={16} />
+            <Settings size={15} />
           </IconButton>
         </div>
       </aside>
@@ -1094,7 +1157,7 @@ export default function App() {
                     }
                   >
                     <button onClick={() => openNote(id)}>
-                      <FileText size={14} />
+                      <NoteIcon note={n} size={14} />
                       <span>{n.title}</span>
                     </button>
                     <button
@@ -1117,12 +1180,13 @@ export default function App() {
             })}
             <IconButton
               label="Create note"
+              className="new-tab"
               onClick={() => {
                 setNewTitle("");
                 setModal("new");
               }}
             >
-              <Plus size={16} />
+              <Plus size={15} />
             </IconButton>
           </div>
           <div className="tab-tools">
@@ -1137,43 +1201,6 @@ export default function App() {
               <PanelRight size={16} />
             </IconButton>
           </div>
-          {rightPanel && view === "note" && note && (
-            <div className="pane-tab-header">
-              <div className="note-tab active">
-                <button onClick={() => setPanelMode("graph")}>
-                  {panelMode === "graph" ? (
-                    <GitBranch size={14} />
-                  ) : panelMode === "outline" ? (
-                    <List size={14} />
-                  ) : (
-                    <Link2 size={14} />
-                  )}
-                  <span>
-                    {panelMode === "graph"
-                      ? `Graph of ${note.title}`
-                      : panelMode === "outline"
-                        ? "Outline"
-                        : panelMode === "backlinks"
-                          ? "Backlinks"
-                          : "Outgoing links"}
-                  </span>
-                </button>
-                <button
-                  className="tab-close"
-                  aria-label="Close details"
-                  onClick={() => setRightPanel(false)}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-              <IconButton
-                label="Open full graph"
-                onClick={() => setView("graph")}
-              >
-                <Plus size={15} />
-              </IconButton>
-            </div>
-          )}
         </div>
         <div className="workspace">
           {view === "note" && note ? (
@@ -1187,7 +1214,7 @@ export default function App() {
                       disabled={historyPosition.current === 0}
                       onClick={() => goHistory(-1)}
                     >
-                      <ArrowLeft size={16} />
+                      <ArrowLeft size={15} />
                     </button>
                     <button
                       aria-label="Go forward"
@@ -1197,19 +1224,36 @@ export default function App() {
                       }
                       onClick={() => goHistory(1)}
                     >
-                      <ArrowRight size={16} />
+                      <ArrowRight size={15} />
                     </button>
                   </div>
-                  <div className="doc-location">
-                    <span>{note.folder}</span>
+                  <nav className="doc-location" aria-label="Breadcrumb">
+                    <button onClick={() => showCollection(note.folder)}>
+                      <Folder size={13} />
+                      {note.folder || "Vault"}
+                    </button>
                     <ChevronRight size={12} />
-                    <span className="doc-title-small">{note.title}</span>
-                  </div>
+                    <span className="doc-title-small">
+                      <NoteIcon note={note} size={13} />
+                      {note.title}
+                    </span>
+                  </nav>
                   <div className="document-actions">
+                    <span className="edited-at">
+                      Edited {editedLabel(note.updatedAt, now)}
+                    </span>
+                    <IconButton
+                      label={note.starred ? "Remove bookmark" : "Bookmark note"}
+                      active={note.starred}
+                      className="star-toggle"
+                      onClick={() => update({ starred: !note.starred })}
+                    >
+                      <Star size={15} fill={note.starred ? "currentColor" : "none"} />
+                    </IconButton>
                     <button
                       className={"mode-toggle " + (editing ? "editing" : "")}
                       aria-label={editing ? "Read" : "Edit"}
-                      title={editing ? "Reading view" : "Editing view"}
+                      title={editing ? "Reading view (⌘E)" : "Editing view (⌘E)"}
                       onClick={() => setEditing(!editing)}
                     >
                       {editing ? <BookOpen size={14} /> : <Pencil size={14} />}
@@ -1218,8 +1262,142 @@ export default function App() {
                     {renderNoteOptions()}
                   </div>
                 </div>
-                <article ref={article} className="document-scroll">
-                  <div className="document-content">
+                <article
+                  ref={article}
+                  className={"document-scroll" + (note.cover ? " has-cover" : "")}
+                >
+                  {note.cover && covers[note.cover] && (
+                    <div className="page-cover" style={coverStyle(note.cover)}>
+                      <div className="cover-actions">
+                        <button onClick={() => setPicker("cover")}>
+                          Change cover
+                        </button>
+                        <button onClick={() => update({ cover: "" })}>
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="document-content" key={note.id}>
+                    <div className="page-head">
+                      {note.icon && (
+                        <button
+                          className="page-icon"
+                          aria-label="Change icon"
+                          title="Change icon"
+                          onClick={() => setPicker("icon")}
+                        >
+                          {note.icon}
+                        </button>
+                      )}
+                      <div className="page-affordances">
+                        {!note.icon && (
+                          <button
+                            onClick={() =>
+                              update({
+                                icon: emojis[
+                                  Math.floor(Math.random() * emojis.length)
+                                ],
+                              })
+                            }
+                          >
+                            <SmilePlus size={14} />
+                            Add icon
+                          </button>
+                        )}
+                        {!note.cover && (
+                          <button
+                            onClick={() =>
+                              update({ cover: randomCover(note.cover) })
+                            }
+                          >
+                            <ImagePlus size={14} />
+                            Add cover
+                          </button>
+                        )}
+                      </div>
+                      {picker && (
+                        <>
+                          <div
+                            className="menu-scrim"
+                            onClick={() => setPicker(null)}
+                          />
+                          <div
+                            className={"picker picker-" + picker}
+                            role="dialog"
+                            aria-label={
+                              picker === "icon" ? "Choose an icon" : "Choose a cover"
+                            }
+                          >
+                            <div className="picker-heading">
+                              <span>
+                                {picker === "icon" ? "Icon" : "Cover gallery"}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  update(
+                                    picker === "icon"
+                                      ? { icon: "" }
+                                      : { cover: "" },
+                                  );
+                                  setPicker(null);
+                                }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                            {picker === "icon" ? (
+                              <div className="emoji-grid">
+                                {emojis.map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    aria-label={"Use " + emoji}
+                                    className={
+                                      note.icon === emoji ? "selected" : ""
+                                    }
+                                    onClick={() => {
+                                      update({ icon: emoji });
+                                      setPicker(null);
+                                    }}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="cover-grid">
+                                {coverKeys.map((key) => (
+                                  <button
+                                    key={key}
+                                    aria-label={covers[key].label + " cover"}
+                                    className={
+                                      note.cover === key ? "selected" : ""
+                                    }
+                                    style={coverStyle(key)}
+                                    onClick={() => {
+                                      update({ cover: key });
+                                      setPicker(null);
+                                    }}
+                                  >
+                                    <span>{covers[key].label}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {picker === "cover" && (
+                              <button
+                                className="picker-shuffle"
+                                onClick={() =>
+                                  update({ cover: randomCover(note.cover) })
+                                }
+                              >
+                                <Shuffle size={13} /> Surprise me
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                     <textarea
                       ref={titleInput}
                       className="note-title"
@@ -1227,46 +1405,147 @@ export default function App() {
                       maxLength={300}
                       value={note.title}
                       rows={1}
+                      placeholder="Untitled"
                       onChange={(e) => update({ title: e.target.value })}
                       onBlur={() => {
                         if (!note.title.trim())
                           update({ title: "Untitled note" });
                       }}
                     />
-                    <div className="note-tags">
-                      {note.tags.map((tag) => (
-                        <button
-                          key={tag}
-                          onClick={() => {
-                            setFilter("#" + tag);
-                            setView("collection");
-                          }}
-                        >
-                          <span>#</span>
-                          {tag}
-                        </button>
-                      ))}
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          const t = newTag.trim().replace(/^#/, "");
-                          if (t && !note.tags.includes(t))
-                            update({ tags: [...note.tags, t] });
-                          setNewTag("");
-                        }}
-                      >
-                        <Plus size={12} />
-                        <input
-                          aria-label="Add tag"
-                          maxLength={64}
-                          placeholder="Add tag"
-                          value={newTag}
-                          onChange={(e) => setNewTag(e.target.value)}
-                        />
-                      </form>
+                    <div className="properties" aria-label="Properties">
+                      <div className="property">
+                        <span className="property-name">
+                          <FolderOpen size={14} />
+                          Folder
+                        </span>
+                        <span className="property-value">
+                          <select
+                            aria-label="Folder"
+                            className="folder-select"
+                            value={note.folder}
+                            onChange={(e) => update({ folder: e.target.value })}
+                          >
+                            {allFolders.map((f) => (
+                              <option key={f}>{f}</option>
+                            ))}
+                          </select>
+                        </span>
+                      </div>
+                      <div className="property">
+                        <span className="property-name">
+                          <Hash size={14} />
+                          Tags
+                        </span>
+                        <div className="property-value note-tags">
+                          {note.tags.map((tag) => (
+                            <span className="tag-chip" key={tag}>
+                              <button onClick={() => showCollection("#" + tag)}>
+                                <span>#</span>
+                                {tag}
+                              </button>
+                              <button
+                                className="tag-remove"
+                                aria-label={"Remove tag " + tag}
+                                onClick={() =>
+                                  update({
+                                    tags: note.tags.filter((t) => t !== tag),
+                                  })
+                                }
+                              >
+                                <X size={11} />
+                              </button>
+                            </span>
+                          ))}
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const t = newTag.trim().replace(/^#/, "");
+                              if (t && !note.tags.includes(t))
+                                update({ tags: [...note.tags, t] });
+                              setNewTag("");
+                            }}
+                          >
+                            <Plus size={12} />
+                            <input
+                              aria-label="Add tag"
+                              maxLength={64}
+                              placeholder="Add tag"
+                              value={newTag}
+                              onChange={(e) => setNewTag(e.target.value)}
+                            />
+                          </form>
+                        </div>
+                      </div>
+                      <div className="property">
+                        <span className="property-name">
+                          <Clock3 size={14} />
+                          Updated
+                        </span>
+                        <span className="property-value muted">
+                          {editedLabel(note.updatedAt, now)}
+                        </span>
+                      </div>
+                      <div className="property">
+                        <span className="property-name">
+                          <Link2 size={14} />
+                          Linked from
+                        </span>
+                        <span className="property-value">
+                          {backlinks.length ? (
+                            backlinks.slice(0, 3).map((n) => (
+                              <button
+                                key={n.id}
+                                className="mention-chip"
+                                onClick={() => openNote(n.id)}
+                              >
+                                <NoteIcon note={n} size={12} />
+                                {n.title}
+                              </button>
+                            ))
+                          ) : (
+                            <span className="muted">No backlinks yet</span>
+                          )}
+                          {backlinks.length > 3 && (
+                            <button
+                              className="mention-more"
+                              onClick={() => openDetails("backlinks")}
+                            >
+                              +{backlinks.length - 3}
+                            </button>
+                          )}
+                        </span>
+                      </div>
                     </div>
                     {editing ? (
                       <div className="markdown-editor">
+                        <div
+                          className="format-bar"
+                          role="toolbar"
+                          aria-label="Formatting"
+                        >
+                          <IconButton label="Bold" onClick={() => format("**", "**")}>
+                            <Bold size={15} />
+                          </IconButton>
+                          <IconButton label="Italic" onClick={() => format("*", "*")}>
+                            <Italic size={15} />
+                          </IconButton>
+                          <IconButton label="Heading" onClick={() => formatLine("## ")}>
+                            <Heading2 size={15} />
+                          </IconButton>
+                          <IconButton label="Quote" onClick={() => formatLine("> ")}>
+                            <Quote size={15} />
+                          </IconButton>
+                          <IconButton label="Task" onClick={() => formatLine("- [ ] ")}>
+                            <ListTodo size={15} />
+                          </IconButton>
+                          <IconButton label="Inline code" onClick={() => format("`", "`")}>
+                            <Code size={15} />
+                          </IconButton>
+                          <span className="format-divider" />
+                          <IconButton label="Link a note" onClick={() => format("[[", "]]")}>
+                            <Link2 size={15} />
+                          </IconButton>
+                        </div>
                         <textarea
                           ref={editor}
                           className="source-editor"
@@ -1284,15 +1563,24 @@ export default function App() {
                           }}
                           value={note.content}
                           onChange={(e) => update({ content: e.target.value })}
-                          placeholder="Start writing..."
+                          placeholder="Start writing, or type [[ to link another note…"
                         />
                         <div className="editor-hint">
-                          <span>Link ideas with [[note title]]</span>
-                          <kbd>⌘ E to read</kbd>
+                          <span>
+                            <Sparkles size={12} /> Markdown supported · link
+                            ideas with [[note title]]
+                          </span>
+                          <kbd>⌘E to read</kbd>
                         </div>
                       </div>
-                    ) : (
-                      <div className="prose">
+                    ) : note.content.trim() ? (
+                      <div
+                        className="prose"
+                        onDoubleClick={(e) => {
+                          if (!(e.target as HTMLElement).closest("button,a"))
+                            setEditing(true);
+                        }}
+                      >
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{
@@ -1359,6 +1647,44 @@ export default function App() {
                           {markdown}
                         </ReactMarkdown>
                       </div>
+                    ) : (
+                      <div className="empty-page">
+                        <p>This page is waiting for its first thought.</p>
+                        <div className="starter-chips">
+                          <button onClick={() => setEditing(true)}>
+                            <Pencil size={14} /> Start writing
+                          </button>
+                          <button
+                            onClick={() => {
+                              update({ content: "- [ ] " });
+                              setEditing(true);
+                            }}
+                          >
+                            <ListTodo size={14} /> Checklist
+                          </button>
+                          <button
+                            onClick={() => {
+                              update({
+                                content:
+                                  "## Context\n\n\n## Ideas\n\n- \n\n## Next steps\n\n- [ ] ",
+                              });
+                              setEditing(true);
+                            }}
+                          >
+                            <List size={14} /> Outline
+                          </button>
+                          <button
+                            onClick={() => {
+                              update({
+                                content: `Related to [[${live.find((n) => n.id !== note.id)?.title || "Another note"}]]`,
+                              });
+                              setEditing(true);
+                            }}
+                          >
+                            <Link2 size={14} /> Linked note
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </article>
@@ -1370,15 +1696,7 @@ export default function App() {
                   }
                 >
                   <div className="panel-mobile-heading">
-                    <span>
-                      {panelMode === "graph"
-                        ? "Local graph"
-                        : panelMode === "outline"
-                          ? "Outline"
-                          : panelMode === "backlinks"
-                            ? "Backlinks"
-                            : "Outgoing links"}
-                    </span>
+                    <span>{panelTitle}</span>
                     <IconButton
                       label="Close details panel"
                       onClick={() => setMobilePanel(false)}
@@ -1386,80 +1704,106 @@ export default function App() {
                       <X size={18} />
                     </IconButton>
                   </div>
-                  <div className="panel-tools">
+                  <div className="panel-tools" role="tablist">
                     <IconButton
                       label="Local graph"
                       active={panelMode === "graph"}
                       onClick={() => setPanelMode("graph")}
                     >
-                      <GitBranch size={16} />
+                      <GitBranch size={15} />
                     </IconButton>
                     <IconButton
                       label="Outline"
                       active={panelMode === "outline"}
                       onClick={() => setPanelMode("outline")}
                     >
-                      <List size={16} />
+                      <List size={15} />
                     </IconButton>
                     <IconButton
                       label="Backlinks"
                       active={panelMode === "backlinks"}
                       onClick={() => setPanelMode("backlinks")}
                     >
-                      <Link2 size={16} />
+                      <Link2 size={15} />
                     </IconButton>
                     <IconButton
                       label="Outgoing links"
                       active={panelMode === "links"}
                       onClick={() => setPanelMode("links")}
                     >
-                      <ArrowUpRight size={16} />
+                      <ArrowUpRight size={15} />
                     </IconButton>
                     <IconButton
                       label="Expand graph"
+                      className="panel-expand"
                       onClick={() => setView("graph")}
                     >
-                      <Maximize2 size={15} />
+                      <Maximize2 size={14} />
                     </IconButton>
                   </div>
+                  <div className="panel-title">{panelTitle}</div>
                   {panelMode === "graph" ? (
-                    <div className="local-graph-view">
-                      <Graph
-                        notes={localGraphNotes}
-                        activeId={note.id}
-                        onSelect={openNote}
-                        showLabels={false}
-                      />
+                    <div className="panel-content graph-panel">
+                      <div className="local-graph-view">
+                        <Graph
+                          notes={localGraphNotes}
+                          activeId={note.id}
+                          onSelect={openNote}
+                          showLabels={false}
+                        />
+                      </div>
+                      <div className="graph-facts">
+                        <button onClick={() => setPanelMode("backlinks")}>
+                          <strong>{backlinks.length}</strong>
+                          <span>
+                            {backlinks.length === 1 ? "backlink" : "backlinks"}
+                          </span>
+                        </button>
+                        <button onClick={() => setPanelMode("links")}>
+                          <strong>{links.length}</strong>
+                          <span>outgoing</span>
+                        </button>
+                        <button onClick={() => setPanelMode("outline")}>
+                          <strong>{headings.length}</strong>
+                          <span>
+                            {headings.length === 1 ? "heading" : "headings"}
+                          </span>
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="panel-content">
                       {panelMode === "outline" && (
                         <>
-                          <h3>Outline</h3>
                           {headings.length ? (
                             headings.map((h, i) => (
                               <button
-                                key={h + i}
-                                className="outline-item"
+                                key={h.text + i}
+                                className={"outline-item level-" + h.level}
                                 onClick={() => {
                                   setEditing(false);
                                   setTimeout(
                                     () =>
                                       document
                                         .getElementById(
-                                          "heading-" + h.replace(/\W+/g, "-"),
+                                          "heading-" +
+                                            h.text.replace(/\W+/g, "-"),
                                         )
-                                        ?.scrollIntoView({ block: "start" }),
+                                        ?.scrollIntoView({
+                                          block: "start",
+                                          behavior: "smooth",
+                                        }),
                                     20,
                                   );
                                 }}
                               >
-                                <ChevronRight size={12} />
-                                {h}
+                                {h.text}
                               </button>
                             ))
                           ) : (
-                            <p className="detail-empty">No headings found.</p>
+                            <p className="detail-empty">
+                              Add headings with ## to build an outline.
+                            </p>
                           )}
                         </>
                       )}
@@ -1478,16 +1822,21 @@ export default function App() {
                                 className="backlink-card"
                                 onClick={() => openNote(n.id)}
                               >
-                                <strong>{n.title}</strong>
+                                <strong>
+                                  <NoteIcon note={n} size={13} />
+                                  {n.title}
+                                </strong>
                                 <p>
-                                  {n.content
-                                    .split("\n")
-                                    .filter(Boolean)
-                                    .find((line) =>
-                                      line
-                                        .toLowerCase()
-                                        .includes(note.title.toLowerCase()),
-                                    ) || n.content.slice(0, 100)}
+                                  {plain(
+                                    n.content
+                                      .split("\n")
+                                      .filter(Boolean)
+                                      .find((line) =>
+                                        line
+                                          .toLowerCase()
+                                          .includes(note.title.toLowerCase()),
+                                      ) || n.content.slice(0, 100),
+                                  )}
                                 </p>
                               </button>
                             ))
@@ -1497,37 +1846,19 @@ export default function App() {
                           <h3 className="unlinked-heading">
                             Unlinked mentions{" "}
                             <span className="count-badge">
-                              {
-                                live.filter(
-                                  (n) =>
-                                    n.id !== note.id &&
-                                    !backlinks.some((b) => b.id === n.id) &&
-                                    n.content
-                                      .toLowerCase()
-                                      .includes(note.title.toLowerCase()),
-                                ).length
-                              }
+                              {unlinked.length}
                             </span>
                           </h3>
-                          {live
-                            .filter(
-                              (n) =>
-                                n.id !== note.id &&
-                                !backlinks.some((b) => b.id === n.id) &&
-                                n.content
-                                  .toLowerCase()
-                                  .includes(note.title.toLowerCase()),
-                            )
-                            .map((n) => (
-                              <button
-                                className="sidebar-note"
-                                key={n.id}
-                                onClick={() => openNote(n.id)}
-                              >
-                                <FileText size={14} />
-                                {n.title}
-                              </button>
-                            ))}
+                          {unlinked.map((n) => (
+                            <button
+                              className="sidebar-note"
+                              key={n.id}
+                              onClick={() => openNote(n.id)}
+                            >
+                              <NoteIcon note={n} size={14} />
+                              {n.title}
+                            </button>
+                          ))}
                         </>
                       )}
                       {panelMode === "links" && (
@@ -1536,16 +1867,28 @@ export default function App() {
                             Outgoing links{" "}
                             <span className="count-badge">{links.length}</span>
                           </h3>
-                          {links.map((title, i) => (
-                            <button
-                              className="outline-item"
-                              key={title + i}
-                              onClick={() => inlineLink(title)}
-                            >
-                              <FileText size={14} />
-                              {title}
-                            </button>
-                          ))}
+                          {links.map((title, i) => {
+                            const target = live.find(
+                              (x) => x.title.toLowerCase() === title.toLowerCase(),
+                            );
+                            return (
+                              <button
+                                className={
+                                  "outline-item link-item" +
+                                  (target ? "" : " unresolved")
+                                }
+                                key={title + i}
+                                onClick={() => inlineLink(title)}
+                              >
+                                {target ? (
+                                  <NoteIcon note={target} size={14} />
+                                ) : (
+                                  <FileText size={14} />
+                                )}
+                                {title}
+                              </button>
+                            );
+                          })}
                           {!links.length && (
                             <p className="detail-empty">No outgoing links.</p>
                           )}
@@ -1560,6 +1903,9 @@ export default function App() {
             <section className="graph-page">
               <div className="page-heading">
                 <div>
+                  <span className="eyebrow">
+                    <Sparkles size={13} /> Your knowledge, connected
+                  </span>
                   <h1>Graph view</h1>
                 </div>
                 <button className="soft-button" onClick={() => setView("note")}>
@@ -1621,23 +1967,71 @@ export default function App() {
             <section className="collection-page">
               <div className="page-heading">
                 <div>
+                  <span className="eyebrow">
+                    {filter === "All notes" ? (
+                      <>
+                        <Sparkles size={13} />
+                        {greeting()}
+                        {user ? `, ${user.name.split(" ")[0]}` : ""}
+                      </>
+                    ) : filter.startsWith("#") ? (
+                      <>
+                        <Hash size={13} /> Tag
+                      </>
+                    ) : filter === "Trash" || filter === "Starred" ? (
+                      <>
+                        <Files size={13} /> Library
+                      </>
+                    ) : (
+                      <>
+                        <Folder size={13} /> Folder
+                      </>
+                    )}
+                  </span>
                   <h1>{filter}</h1>
                   <p>
                     {filter === "Trash"
                       ? "Deleted notes can be restored here."
-                      : `${listed.length} files`}
+                      : `${listed.length} ${listed.length === 1 ? "note" : "notes"}`}
                   </p>
                 </div>
                 <button
                   className="primary-button"
                   onClick={() => {
                     setNewTitle("");
+                    if (allFolders.includes(filter)) setNewFolder(filter);
                     setModal("new");
                   }}
                 >
                   <Plus size={15} /> New note
                 </button>
               </div>
+              {filter === "All notes" && recent.length > 0 && (
+                <div className="recent-strip">
+                  <div className="section-label">
+                    <Clock3 size={13} /> Jump back in
+                  </div>
+                  <div className="recent-row">
+                    {recent.slice(0, 4).map((n) => (
+                      <button
+                        key={n.id}
+                        className="recent-card"
+                        onClick={() => openNote(n.id)}
+                      >
+                        <span
+                          className={"recent-cover" + (n.cover ? "" : " plain")}
+                          style={coverStyle(n.cover)}
+                        />
+                        <span className="recent-icon">
+                          <NoteIcon note={n} size={18} />
+                        </span>
+                        <strong>{n.title}</strong>
+                        <small>{editedLabel(n.updatedAt, now)}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="collection-filter">
                 <button
                   className={filter === "All notes" ? "active" : ""}
@@ -1666,7 +2060,7 @@ export default function App() {
                   .map((n) => (
                     <button
                       key={n.id}
-                      className="note-card"
+                      className={"note-card" + (n.deleted ? " deleted" : "")}
                       onClick={() => {
                         if (n.deleted) {
                           saveNote({
@@ -1678,27 +2072,34 @@ export default function App() {
                         } else openNote(n.id);
                       }}
                     >
-                      <div className="note-card-top">
-                        <span>
-                          <FileText size={18} />
-                        </span>
-                        {n.starred && <Star size={14} />}
-                      </div>
-                      <h3>{n.title}</h3>
-                      <p>
-                        {n.content.replace(/[#*>`\[\]]/g, "").slice(0, 145) ||
-                          "Empty note"}
-                      </p>
-                      <div>
-                        <span>{n.deleted ? "Click to restore" : n.folder}</span>
-                        <small>{dateFormat.format(n.updatedAt)}</small>
+                      <span
+                        className={"note-card-cover" + (n.cover ? "" : " plain")}
+                        style={coverStyle(n.cover)}
+                      />
+                      <div className="note-card-body">
+                        <div className="note-card-top">
+                          <span className="note-card-icon">
+                            <NoteIcon note={n} size={18} />
+                          </span>
+                          {n.starred && <Star size={14} fill="currentColor" />}
+                        </div>
+                        <h3>{n.title}</h3>
+                        <p>{plain(n.content).slice(0, 145) || "Empty note"}</p>
+                        <div className="note-card-meta">
+                          <span>
+                            {n.deleted ? "Click to restore" : n.folder}
+                          </span>
+                          <small>{dateFormat.format(n.updatedAt)}</small>
+                        </div>
                       </div>
                     </button>
                   ))}
               </div>
               {!listed.length && (
                 <div className="empty-state">
-                  <BookOpen size={34} />
+                  <span className="empty-orb">
+                    <BookOpen size={26} />
+                  </span>
                   <h2>No files found.</h2>
                   <p>
                     {filter === "Trash"
@@ -1723,7 +2124,7 @@ export default function App() {
             <span>{syncLabel}</span>
           </button>
           <div>
-            {note && (
+            {note && view === "note" && (
               <>
                 <button
                   onClick={() => {
@@ -1740,6 +2141,15 @@ export default function App() {
                 <span>{note.content.length} characters</span>
               </>
             )}
+            <button
+              className="theme-flip"
+              aria-label="Switch color scheme"
+              title="Switch color scheme"
+              onClick={() => setTheme(isDark() ? "light" : "dark")}
+            >
+              <Sun size={13} className="sun" />
+              <Moon size={13} className="moon" />
+            </button>
           </div>
         </footer>
         <nav className="mobile-navigation">
@@ -1767,6 +2177,7 @@ export default function App() {
             <Search size={19} />
           </button>
           <button
+            className="mobile-create"
             aria-label="New note"
             onClick={() => {
               setNewTitle("");
@@ -1802,18 +2213,23 @@ export default function App() {
       />
       {toast && (
         <div className="toast" role="status">
-          <Check size={16} />
+          <Check size={15} />
           {toast}
         </div>
       )}
       {modal === "search" && (
-        <Modal title="Quick switcher" onClose={() => setModal(null)} wide>
+        <Modal
+          title="Quick switcher"
+          onClose={() => setModal(null)}
+          wide
+          className="palette"
+        >
           <div className="command-input">
-            <Search size={20} />
+            <Search size={18} />
             <input
               aria-label="Search your vault"
               autoFocus
-              placeholder="Type to search your vault..."
+              placeholder="Search or jump to a note…"
               onKeyDown={(e) =>
                 navigateResults(e, results.length, () =>
                   openNote(results[Math.max(0, selection)].id),
@@ -1826,7 +2242,7 @@ export default function App() {
           </div>
           <div className="command-results">
             <div className="command-label">
-              {query ? "MATCHING NOTES" : "YOUR NOTES"}
+              {query ? "Matching notes" : "Recently edited"}
             </div>
             {results.map((n, i) => (
               <button
@@ -1835,12 +2251,16 @@ export default function App() {
                 key={n.id}
                 onClick={() => openNote(n.id)}
               >
-                <FileText size={17} />
+                <span className="result-icon">
+                  <NoteIcon note={n} size={16} />
+                </span>
                 <span>
                   <strong>{n.title}</strong>
-                  <small>{n.folder}</small>
+                  <small>
+                    {n.folder} · {editedLabel(n.updatedAt, now)}
+                  </small>
                 </span>
-                <ArrowUpRight size={15} />
+                <ArrowUpRight size={14} className="result-go" />
               </button>
             ))}
             {!results.length && (
@@ -1857,18 +2277,26 @@ export default function App() {
               <Plus size={14} />
               Create a new note
             </button>
-            <span>Search your whole vault</span>
+            <span>
+              <kbd>↑</kbd>
+              <kbd>↓</kbd> navigate <kbd>↵</kbd> open
+            </span>
           </div>
         </Modal>
       )}
       {modal === "commands" && (
-        <Modal title="Command palette" onClose={() => setModal(null)} wide>
+        <Modal
+          title="Command palette"
+          onClose={() => setModal(null)}
+          wide
+          className="palette"
+        >
           <div className="command-input">
-            <Terminal size={18} />
+            <Terminal size={17} />
             <input
               aria-label="Search commands"
               autoFocus
-              placeholder="Type a command..."
+              placeholder="Type a command…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) =>
@@ -1877,8 +2305,10 @@ export default function App() {
                 )
               }
             />
+            <kbd>esc</kbd>
           </div>
           <div className="command-results">
+            <div className="command-label">Commands</div>
             {commandActions.map((command, i) => (
               <button
                 className={i === selection ? "is-selected" : ""}
@@ -1886,6 +2316,7 @@ export default function App() {
                 onMouseEnter={() => setSelection(i)}
                 onClick={command.run}
               >
+                <span className="result-icon">{command.icon}</span>
                 <span>
                   <strong>{command.title}</strong>
                 </span>
@@ -1897,14 +2328,17 @@ export default function App() {
             )}
           </div>
           <div className="command-footer">
-            <span>↑↓ to navigate · Enter to execute · Esc to dismiss</span>
+            <span>
+              <kbd>↑</kbd>
+              <kbd>↓</kbd> navigate <kbd>↵</kbd> run <kbd>esc</kbd> dismiss
+            </span>
           </div>
         </Modal>
       )}
       {modal === "new" && (
         <Modal title="New note" onClose={() => setModal(null)}>
           <p className="modal-subtitle">
-            Create a Markdown note in your vault.
+            Give your thought a name and a home.
           </p>
           <form
             onSubmit={(e) => {
@@ -1987,12 +2421,13 @@ export default function App() {
               ? "Create a Bedrock account"
               : "Sign in to Bedrock"
           }
+          className="auth-dialog"
           onClose={() => {
             if (!busy) setModal(null);
           }}
         >
           <div className="auth-symbol">
-            <Rock />
+            <BrandMark large />
           </div>
           <p className="modal-subtitle">
             {authMode === "register"
@@ -2119,6 +2554,8 @@ export default function App() {
           <SettingsPanel
             theme={theme}
             onTheme={setTheme}
+            accent={accent}
+            onAccent={setAccent}
             user={user}
             syncLabel={syncLabel}
             onSignIn={() => {
@@ -2165,10 +2602,11 @@ export default function App() {
           </p>
           <div className="shortcut-list">
             {[
-              ["Open quick switcher", "⌘ / Ctrl O"],
+              ["Open quick switcher", "⌘ / Ctrl K"],
               ["Command palette", "⌘ / Ctrl P"],
               ["Create a note", "⌘ / Ctrl N"],
               ["Edit / read a note", "⌘ / Ctrl E"],
+              ["Bold / italic", "⌘ / Ctrl B · I"],
               ["Close a dialog", "Esc"],
               ["Link two thoughts", "[[note title]]"],
             ].map(([a, b]) => (

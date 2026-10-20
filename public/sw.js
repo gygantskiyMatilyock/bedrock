@@ -1,4 +1,4 @@
-const CACHE = "bedrock-app-v2";
+const CACHE = "bedrock-app-v3";
 const shell = ["/", "/favicon.svg"];
 self.addEventListener("install", (event) => {
   event.waitUntil(

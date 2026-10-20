@@ -58,6 +58,34 @@ const note = {
 };
 
 describe("private vault API", () => {
+  test("stores page icons and covers, and rejects malformed covers", async () => {
+    const { request } = setup();
+    const { cookie } = await register(request);
+    const saved = await request(
+      "/api/notes/styled",
+      "PUT",
+      { ...note, icon: "🌿", cover: "aurora" },
+      cookie,
+    );
+    expect(saved.status).toBe(200);
+    expect((await saved.json()).note).toMatchObject({
+      icon: "🌿",
+      cover: "aurora",
+    });
+    const plain = await request("/api/notes/plain", "PUT", note, cookie);
+    expect((await plain.json()).note).toMatchObject({ icon: "", cover: "" });
+    expect(
+      (
+        await request(
+          "/api/notes/bad-cover",
+          "PUT",
+          { ...note, cover: "url(javascript:alert(1))" },
+          cookie,
+        )
+      ).status,
+    ).toBe(400);
+  });
+
   test("registers, authenticates, and revokes a session on logout", async () => {
     const { request } = setup();
     const { cookie, user } = await register(request);

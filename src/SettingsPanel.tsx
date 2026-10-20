@@ -7,6 +7,8 @@ type Section = "editor" | "files" | "appearance" | "hotkeys" | "sync" | "about";
 type SettingsPanelProps = {
   theme: string;
   onTheme: (value: string) => void;
+  accent: string;
+  onAccent: (value: string) => void;
   user: User | null;
   syncLabel: string;
   onSignIn: () => void;
@@ -21,6 +23,14 @@ type SettingsPanelProps = {
   spellcheck: boolean;
   onSpellcheck: (value: boolean) => void;
 };
+
+const accents = [
+  { id: "violet", label: "Violet", color: "#7c5cff" },
+  { id: "blue", label: "Blue", color: "#2f80ed" },
+  { id: "green", label: "Green", color: "#16a34a" },
+  { id: "amber", label: "Amber", color: "#e8890c" },
+  { id: "rose", label: "Rose", color: "#e5487b" },
+];
 
 function SettingRow({
   name,
@@ -80,6 +90,8 @@ function Toggle({
 export default function SettingsPanel({
   theme,
   onTheme,
+  accent,
+  onAccent,
   user,
   syncLabel,
   onSignIn,
@@ -163,21 +175,39 @@ export default function SettingsPanel({
                   value={theme}
                   onChange={(event) => onTheme(event.target.value)}
                 >
-                  <option value="dark">Dark</option>
+                  <option value="system">Adapt to system</option>
                   <option value="light">Light</option>
+                  <option value="dark">Dark</option>
                 </select>
               }
             />
             <SettingRow
               name="Accent color"
-              description="Purple is used for links, tags, and selected controls."
+              description="Used for links, tags, selection, and the graph."
+              labelId="settings-accent-label"
               control={
-                <span
-                  className="settings-accent-swatch"
-                  role="img"
-                  aria-label="Purple accent"
-                  style={{ backgroundColor: "#8b5cf6" }}
-                />
+                <div
+                  className="accent-options"
+                  role="radiogroup"
+                  aria-labelledby="settings-accent-label"
+                >
+                  {accents.map((option) => (
+                    <button
+                      type="button"
+                      key={option.id}
+                      role="radio"
+                      aria-checked={accent === option.id}
+                      aria-label={option.label}
+                      title={option.label}
+                      className={
+                        "settings-accent-swatch" +
+                        (accent === option.id ? " selected" : "")
+                      }
+                      style={{ backgroundColor: option.color }}
+                      onClick={() => onAccent(option.id)}
+                    />
+                  ))}
+                </div>
               }
             />
             <SettingRow
@@ -393,14 +423,15 @@ export default function SettingsPanel({
 
         {section === "about" && (
           <>
-            <div className="settings-version">Bedrock 2</div>
+            <div className="settings-version">Bedrock 3</div>
             <p className="settings-description">
               An independent web workspace for Markdown notes and connected
               thinking.
             </p>
             <p className="settings-description">
-              Bedrock is inspired by Obsidian’s interface. It is a separate
-              application and is not affiliated with or endorsed by Obsidian.
+              Bedrock blends the linked thinking of Obsidian with the calm
+              page layout of Notion. It is a separate application and is not
+              affiliated with or endorsed by either.
             </p>
             <p className="settings-note">
               This web version supports notes, links, graphs, and account sync.

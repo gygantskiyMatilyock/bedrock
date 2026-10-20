@@ -1,13 +1,14 @@
 # Bedrock
 
-A web workspace modeled on Obsidian's app interface, with charcoal panes, compact tabs, purple links, a file explorer, and a graph beside the editor. Built with React, TypeScript, Vite, Bun, and SQLite.
+A calm workspace for connected notes: Notion's warm, airy pages (icons, gradient covers, properties, gallery home) combined with Obsidian's linked thinking (tabs, wiki links, backlinks, outline, and a graph beside the editor). Built with React, TypeScript, Vite, Bun, and SQLite.
 
 ## Features
 
-- Markdown editing and preview, wiki links, backlinks, outline, and an interactive graph
+- Markdown editing and preview with a formatting toolbar, wiki links, backlinks, outline, and an interactive graph
+- Page icons, gradient covers, and a properties block (folder, tags, updated, linked from) on every note
 - Private accounts with automatic sync across devices, offline caching, and conflict copies
 - Notes, folders, tags, stars, daily notes, search, tabs, focus mode, and trash/restore
-- Markdown import and export, vault JSON export, light and dark themes
+- Markdown import and export, vault JSON export, system/light/dark themes and five accent colors
 - Responsive layout, quick switcher, command palette, reduced-motion support
 - Settings for theme, editor font size, spellcheck, and readable line length
 
@@ -46,4 +47,4 @@ Passwords are Argon2id-hashed and sessions use HTTPOnly cookies. Password recove
 - [Obsidian workspace documentation](https://obsidian.md/help/workspace) and [mobile documentation](https://obsidian.md/help/mobile) inform navigation.
 - [Emil Kowalski's design-engineering skill](https://github.com/emilkowalski/skills/blob/main/skills/emil-design-eng/SKILL.md) informs interaction and motion.
 
-The earlier design used Evernote and mymind references from Mobbin; the current interface follows the user's subsequent request for Obsidian. Motion is restrained, with immediate keyboard interactions and reduced-motion overrides. See `design-qa.md` for reference comparisons and validation.
+The current interface blends Obsidian with Notion. Notion screens on Mobbin ([page editor](https://mobbin.com/screens/a7c67122-92ad-48b5-aae6-38c53b3edf8b), [cover and icon](https://mobbin.com/screens/4acb3a13-ddf8-4b60-9eae-e6ade2cc4dd3), [slash menu](https://mobbin.com/screens/5840d7b8-6098-4288-a55f-02f4232fd051)) informed the warm sidebar, page header, covers, and icons. [Lightfield](https://mobbin.com/screens/7438b199-644d-4370-b6fe-8e860addf330) and [Craft](https://mobbin.com/screens/8bc2c4e6-34cd-4478-900c-b0c0c8f8da3f) informed the properties block, and [v0](https://mobbin.com/screens/5f353fc3-d9ce-4d1c-be9b-cc1b4ad07578) and [Navattic](https://mobbin.com/screens/c65971cf-c4ea-45e9-99a5-555930cb5d73) informed the command palette. Motion is restrained, with immediate keyboard interactions and reduced-motion overrides. See `design-qa.md` for validation.
