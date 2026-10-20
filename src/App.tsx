@@ -47,6 +47,17 @@ import {
   ListTodo,
   Code,
   WifiOff,
+  Files,
+  FilePlus2,
+  FolderPlus,
+  ChevronsUpDown,
+  ChevronsUp,
+  ArrowDownAZ,
+  Tags,
+  Bookmark,
+  Settings,
+  Terminal,
+  SlidersHorizontal,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -54,6 +65,7 @@ import type { Note } from "./types";
 import { seed } from "./seed";
 import { useVault } from "./useVault";
 import Graph from "./Graph";
+import SettingsPanel from "./SettingsPanel";
 
 function Rock({ small = false }: { small?: boolean }) {
   return (
@@ -100,17 +112,22 @@ function Modal({
   children,
   onClose,
   wide = false,
+  className = "",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const old = document.activeElement as HTMLElement;
     const el = ref.current;
-    el?.querySelector<HTMLElement>("input,button,textarea")?.focus();
+    (
+      el?.querySelector<HTMLElement>("input,textarea,select") ||
+      el?.querySelector<HTMLElement>("button")
+    )?.focus();
     const fn = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key === "Tab") {
@@ -148,7 +165,7 @@ function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={"modal " + (wide ? "wide" : "")}
+        className={"modal " + (wide ? "wide " : "") + className}
       >
         <div className="modal-heading">
           <h2>{title}</h2>
@@ -198,11 +215,21 @@ export default function App() {
   const [sidebar, setSidebar] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [rightPanel, setRightPanel] = useState(true);
+  const [mobilePanel, setMobilePanel] = useState(false);
   const [focus, setFocus] = useState(false);
   const [modal, setModal] = useState<
-    "search" | "auth" | "settings" | "new" | "help" | null
+    | "search"
+    | "commands"
+    | "auth"
+    | "settings"
+    | "new"
+    | "folder"
+    | "help"
+    | null
   >(null);
   const [query, setQuery] = useState("");
+  const [selection, setSelection] = useState(0);
+  useEffect(() => setSelection(0), [query, modal]);
   const [authMode, setAuthMode] = useState("register");
   const [busy, setBusy] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -211,10 +238,72 @@ export default function App() {
   const [newTitle, setNewTitle] = useState("");
   const [newFolder, setNewFolder] = useState("Ideas");
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("bedrock-theme") || "light",
+    () => localStorage.getItem("bedrock-theme-obsidian") || "dark",
   );
   const [newTag, setNewTag] = useState("");
   const [zoom, setZoom] = useState(1);
+  const [sidebarMode, setSidebarMode] = useState<
+    "files" | "search" | "bookmarks" | "tags"
+  >("files");
+  const [panelMode, setPanelMode] = useState<
+    "graph" | "outline" | "backlinks" | "links"
+  >("graph");
+  const [sortByName, setSortByName] = useState(false);
+  const [folderDraft, setFolderDraft] = useState("");
+  const [extraFolders, setExtraFolders] = useState<string[]>([]);
+  const [readableWidth, setReadableWidth] = useState(
+    () => localStorage.getItem("bedrock-readable") !== "false",
+  );
+  const [fontSize, setFontSize] = useState(
+    () => Number(localStorage.getItem("bedrock-fontsize")) || 14,
+  );
+  const [spellcheck, setSpellcheck] = useState(
+    () => localStorage.getItem("bedrock-spellcheck") !== "false",
+  );
+  const history = useRef(["welcome"]);
+  const historyPosition = useRef(0);
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const allFolders = [
+    ...new Set([
+      ...folders,
+      ...extraFolders,
+      ...notes.filter((n) => !n.deleted).map((n) => n.folder),
+    ]),
+  ];
+  useEffect(() => {
+    try {
+      setExtraFolders(
+        JSON.parse(
+          localStorage.getItem("bedrock-folders:" + (user?.id || "guest")) ||
+            "[]",
+        ),
+      );
+    } catch {
+      setExtraFolders([]);
+    }
+  }, [user?.id]);
+  useEffect(() => {
+    localStorage.setItem("bedrock-readable", String(readableWidth));
+    localStorage.setItem("bedrock-fontsize", String(fontSize));
+    localStorage.setItem("bedrock-spellcheck", String(spellcheck));
+  }, [readableWidth, fontSize, spellcheck]);
+  const toggleSidebar = () => {
+    if (window.innerWidth <= 700) setSidebar((v) => !v);
+    else setSidebarHidden((v) => !v);
+    setFocus(false);
+  };
+  const goHistory = (delta: number) => {
+    const index = historyPosition.current + delta;
+    if (index < 0 || index >= history.current.length) return;
+    historyPosition.current = index;
+    const id = history.current[index];
+    setMobilePanel(false);
+    setActiveId(id);
+    setView("note");
+    setEditing(false);
+    setTabs((t) => (t.includes(id) ? t : [...t, id]));
+    setHistoryVersion((v) => v + 1);
+  };
   const titleInput = useRef<HTMLTextAreaElement>(null);
   const editor = useRef<HTMLTextAreaElement>(null),
     importer = useRef<HTMLInputElement>(null),
@@ -235,6 +324,13 @@ export default function App() {
     return () => window.removeEventListener("resize", resize);
   }, [note?.title, view]);
   const openNote = (id: string) => {
+    if (history.current[historyPosition.current] !== id) {
+      history.current = history.current.slice(0, historyPosition.current + 1);
+      history.current.push(id);
+      historyPosition.current = history.current.length - 1;
+      setHistoryVersion((v) => v + 1);
+    }
+    setMobilePanel(false);
     setActiveId(id);
     setView("note");
     setEditing(false);
@@ -285,14 +381,22 @@ export default function App() {
   };
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("bedrock-theme", theme);
+    localStorage.setItem("bedrock-theme-obsidian", theme);
   }, [theme]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        ["k", "o"].includes(e.key.toLowerCase())
+      ) {
         e.preventDefault();
         setModal((m) => (m === "search" ? null : "search"));
         setQuery("");
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        setQuery("");
+        setModal((m) => (m === "commands" ? null : "commands"));
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
         e.preventDefault();
@@ -305,6 +409,7 @@ export default function App() {
       if (e.key === "Escape") {
         setMenu(false);
         setSidebar(false);
+        setMobilePanel(false);
         setFocus(false);
       }
     };
@@ -321,6 +426,21 @@ export default function App() {
           n.content.toLowerCase().includes(`[[${note.title.toLowerCase()}]]`),
       )
     : [];
+  const localGraphNotes = note
+    ? live.filter((candidate) => {
+        if (candidate.id === note.id) return true;
+        const targets = (content: string) =>
+          [...content.matchAll(/\[\[([^\]\n]+)\]\]/g)].map((match) =>
+            match[1].split("|")[0].split("#")[0].trim().toLowerCase(),
+          );
+        return (
+          targets(note.content).includes(
+            candidate.title.trim().toLowerCase(),
+          ) ||
+          targets(candidate.content).includes(note.title.trim().toLowerCase())
+        );
+      })
+    : [];
   const headings = note
     ? [...note.content.matchAll(/^#{1,3} (.+)$/gm)].map((m) => m[1])
     : [];
@@ -335,6 +455,99 @@ export default function App() {
         .slice(0, 14),
     [notes, query],
   );
+  const commandActions = [
+    {
+      title: "Create new note",
+      hint: "Ctrl N",
+      run: () => {
+        setNewTitle("");
+        setModal("new");
+      },
+    },
+    {
+      title: "Open quick switcher",
+      hint: "Ctrl O",
+      run: () => {
+        setQuery("");
+        setModal("search");
+      },
+    },
+    {
+      title: "Daily notes: Open today’s daily note",
+      hint: "",
+      run: () => {
+        setModal(null);
+        daily();
+      },
+    },
+    {
+      title: "Graph view: Open graph view",
+      hint: "",
+      run: () => {
+        setView("graph");
+        setModal(null);
+      },
+    },
+    { title: "Open settings", hint: "", run: () => setModal("settings") },
+    {
+      title: "Toggle reading view",
+      hint: "Ctrl E",
+      run: () => {
+        setEditing((v) => !v);
+        setModal(null);
+      },
+    },
+    {
+      title: "Toggle left sidebar",
+      hint: "",
+      run: () => {
+        toggleSidebar();
+        setModal(null);
+      },
+    },
+    {
+      title: "Toggle right sidebar",
+      hint: "",
+      run: () => {
+        setRightPanel((v) => !v);
+        setModal(null);
+      },
+    },
+    {
+      title: "Files: Show all notes",
+      hint: "",
+      run: () => {
+        setView("collection");
+        setFilter("All notes");
+        setModal(null);
+      },
+    },
+    {
+      title: "Files: Import Markdown files",
+      hint: "",
+      run: () => importer.current?.click(),
+    },
+  ].filter((command) =>
+    command.title.toLowerCase().includes(query.toLowerCase()),
+  );
+  const navigateResults = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    count: number,
+    choose: () => void,
+  ) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelection((i) => Math.min(i + 1, count - 1));
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelection((i) => Math.max(0, i - 1));
+    }
+    if (e.key === "Enter" && count) {
+      e.preventDefault();
+      choose();
+    }
+  };
   const listed =
     filter === "Trash"
       ? notes.filter((n) => n.deleted)
@@ -431,292 +644,444 @@ export default function App() {
     notify(`Imported ${count} ${count === 1 ? "note" : "notes"}`);
     setModal(null);
   };
+  const openDetails = (mode: typeof panelMode) => {
+    setView("note");
+    setRightPanel(true);
+    setPanelMode(mode);
+    setMobilePanel(window.innerWidth <= 900);
+  };
+  const renderNoteOptions = () =>
+    note && (
+      <div className="menu-anchor">
+        <IconButton label="Note options" onClick={() => setMenu(!menu)}>
+          <MoreHorizontal size={19} />
+        </IconButton>
+        {menu && (
+          <>
+            <div className="menu-scrim" onClick={() => setMenu(false)} />
+            <div className="dropdown">
+              <button
+                onClick={() => {
+                  update({ starred: !note.starred });
+                  setMenu(false);
+                }}
+              >
+                <Bookmark size={15} />
+                {note.starred ? "Remove bookmark" : "Bookmark"}
+              </button>
+              <button
+                onClick={() => {
+                  setFocus((v) => !v);
+                  setMenu(false);
+                }}
+              >
+                <Maximize2 size={15} />
+                Focus mode
+              </button>
+              <button
+                onClick={() => {
+                  openDetails("graph");
+                  setMenu(false);
+                }}
+              >
+                <GitBranch size={15} />
+                Open local graph
+              </button>
+              <button
+                onClick={() => {
+                  openDetails("backlinks");
+                  setMenu(false);
+                }}
+              >
+                <Link2 size={15} />
+                Show backlinks
+              </button>
+              <button onClick={exportNote}>
+                <ArrowDownToLine size={15} />
+                Export Markdown
+              </button>
+              <button
+                onClick={() => {
+                  create(note.title + " (copy)", note.folder, note.content);
+                  setMenu(false);
+                }}
+              >
+                <Copy size={15} />
+                Duplicate note
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard
+                    ?.writeText(note.content)
+                    .then(() => notify("Note copied"));
+                  setMenu(false);
+                }}
+              >
+                <Copy size={15} />
+                Copy Markdown
+              </button>
+              <button
+                className="danger"
+                onClick={() => {
+                  vault.deleteNote(note.id);
+                  setMenu(false);
+                  notify("Moved to trash");
+                }}
+              >
+                <Trash2 size={15} />
+                Move to trash
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
   return (
     <div
       className={
         "app " +
         (focus ? "focus-mode " : "") +
-        (sidebarHidden ? "sidebar-hidden" : "")
+        (sidebarHidden ? "sidebar-hidden " : "") +
+        (!readableWidth ? "wide-editor" : "")
       }
+      style={{ "--editor-font-size": `${fontSize}px` } as React.CSSProperties}
     >
+      {mobilePanel && (
+        <div className="details-scrim" onClick={() => setMobilePanel(false)} />
+      )}
       {sidebar && (
         <div className="mobile-scrim" onClick={() => setSidebar(false)} />
       )}
       <aside className={"sidebar " + (sidebar ? "mobile-open" : "")}>
-        <div className="brand">
-          <span className="brand-rock">
-            <Rock />
-          </span>
-          <span>
-            bedrock<span className="brand-dot">.</span>
-          </span>
-          <span className="beta">BETA</span>
+        <div className="sidebar-header">
+          <IconButton
+            label="Files"
+            active={sidebarMode === "files"}
+            onClick={() => setSidebarMode("files")}
+          >
+            <Files size={17} />
+          </IconButton>
+          <IconButton
+            label="Find anything"
+            active={sidebarMode === "search"}
+            onClick={() => {
+              setSidebarMode("search");
+              setQuery("");
+            }}
+          >
+            <Search size={17} />
+          </IconButton>
+          <IconButton
+            label="Bookmarks"
+            active={sidebarMode === "bookmarks"}
+            onClick={() => setSidebarMode("bookmarks")}
+          >
+            <Bookmark size={17} />
+          </IconButton>
+          <IconButton
+            label="Tags"
+            active={sidebarMode === "tags"}
+            onClick={() => setSidebarMode("tags")}
+          >
+            <Tags size={17} />
+          </IconButton>
+          <IconButton label="Collapse sidebar" onClick={toggleSidebar}>
+            <PanelLeft size={16} />
+          </IconButton>
         </div>
-        <button className="vault-switch" onClick={() => setModal("settings")}>
-          <span className="vault-avatar">
-            {user?.name?.slice(0, 1).toUpperCase() || "P"}
-          </span>
-          <span>
-            <strong>
-              {user ? `${user.name.split(" ")[0]}’s vault` : "Personal vault"}
-            </strong>
-            <small>Your space to think</small>
-          </span>
-          <ChevronDown size={15} />
-        </button>
-        <button
-          className="search-trigger"
-          onClick={() => {
-            setModal("search");
-            setQuery("");
-          }}
-        >
-          <Search size={16} />
-          <span>Find anything</span>
-          <kbd>⌘ K</kbd>
-        </button>
-        <nav className="main-nav">
-          <button
-            className={
-              view === "collection" && filter === "All notes" ? "selected" : ""
+        <div className="sidebar-tools">
+          <IconButton
+            label="New note"
+            onClick={() => {
+              setNewTitle("");
+              setModal("new");
+            }}
+          >
+            <FilePlus2 size={17} />
+          </IconButton>
+          <IconButton
+            label="New folder"
+            onClick={() => {
+              setFolderDraft("");
+              setModal("folder");
+            }}
+          >
+            <FolderPlus size={17} />
+          </IconButton>
+          <IconButton
+            label="Sort files by name"
+            active={sortByName}
+            onClick={() => setSortByName((v) => !v)}
+          >
+            <ArrowDownAZ size={17} />
+          </IconButton>
+          <IconButton
+            label="Collapse all folders"
+            onClick={() =>
+              setCollapsed((c) =>
+                c.length === allFolders.length ? [] : allFolders,
+              )
             }
+          >
+            <ChevronsUp size={17} />
+          </IconButton>
+        </div>
+        {sidebarMode === "search" && (
+          <div className="sidebar-search">
+            <Search size={15} />
+            <input
+              aria-label="Search your vault"
+              autoFocus
+              placeholder="Search..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button aria-label="Clear search" onClick={() => setQuery("")}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        )}
+        <div className="sidebar-scroll">
+          {sidebarMode === "files" && (
+            <>
+              {allFolders.map((folder) => {
+                const items = live
+                  .filter((n) => n.folder === folder)
+                  .sort((a, b) =>
+                    sortByName ? a.title.localeCompare(b.title) : 0,
+                  );
+                const isCollapsed = collapsed.includes(folder);
+                return (
+                  <div key={folder} className="folder-group">
+                    <button
+                      className="folder-row"
+                      onClick={() =>
+                        setCollapsed((c) =>
+                          c.includes(folder)
+                            ? c.filter((f) => f !== folder)
+                            : [...c, folder],
+                        )
+                      }
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight size={13} />
+                      ) : (
+                        <ChevronDown size={13} />
+                      )}
+                      <span>{folder}</span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className="folder-children">
+                        {items.map((n) => (
+                          <button
+                            className={
+                              "tree-note " +
+                              (note?.id === n.id && view === "note"
+                                ? "current"
+                                : "")
+                            }
+                            key={n.id}
+                            onClick={() => openNote(n.id)}
+                            title={n.title}
+                          >
+                            <span>{n.title}</span>
+                          </button>
+                        ))}
+                        {!items.length && (
+                          <button
+                            className="empty-folder"
+                            onClick={() => {
+                              setNewFolder(folder);
+                              setNewTitle("");
+                              setModal("new");
+                            }}
+                          >
+                            New note
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
+          {sidebarMode === "search" && (
+            <div className="quick-search-results">
+              <div className="section-label">
+                {results.length} matching files
+              </div>
+              {results.map((n) => (
+                <button
+                  className="search-result"
+                  key={n.id}
+                  onClick={() => openNote(n.id)}
+                >
+                  <span>{n.title}</span>
+                  <small>
+                    {n.content.replace(/[#*>`\[\]]/g, "").slice(0, 90)}
+                  </small>
+                </button>
+              ))}
+              {!results.length && (
+                <p className="detail-empty">No matches found.</p>
+              )}
+            </div>
+          )}
+          {sidebarMode === "bookmarks" && (
+            <>
+              <div className="section-label">Bookmarks</div>
+              {live
+                .filter((n) => n.starred)
+                .map((n) => (
+                  <button
+                    key={n.id}
+                    className="sidebar-note"
+                    onClick={() => openNote(n.id)}
+                  >
+                    <FileText size={14} />
+                    <span>{n.title}</span>
+                  </button>
+                ))}
+              {!live.some((n) => n.starred) && (
+                <p className="detail-empty">Bookmark a note from its menu.</p>
+              )}
+            </>
+          )}
+          {sidebarMode === "tags" && (
+            <div className="tag-list">
+              <div className="section-label">Tags</div>
+              {[...new Set(live.flatMap((n) => n.tags))].sort().map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => {
+                    setFilter("#" + tag);
+                    setView("collection");
+                    setSidebar(false);
+                  }}
+                >
+                  <Hash size={14} />
+                  <span>{tag}</span>
+                  <small>
+                    {live.filter((n) => n.tags.includes(tag)).length}
+                  </small>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="sidebar-actions">
+          <IconButton
+            label="All notes"
+            active={view === "collection"}
             onClick={() => {
               setView("collection");
               setFilter("All notes");
               setSidebar(false);
             }}
           >
-            <LayoutGrid size={17} />
-            <span>All notes</span>
-            <small>{live.length}</small>
-          </button>
-          <button onClick={daily}>
+            <Files size={17} />
+          </IconButton>
+          <IconButton label="Daily note" onClick={daily}>
             <CalendarDays size={17} />
-            <span>Daily note</span>
-            <span className="tiny-sun" aria-hidden="true">
-              ☀
-            </span>
-          </button>
-          <button
-            className={view === "graph" ? "selected" : ""}
+          </IconButton>
+          <IconButton
+            label="Graph view"
+            active={view === "graph"}
             onClick={() => {
               setView("graph");
               setSidebar(false);
             }}
           >
             <Network size={17} />
-            <span>Graph view</span>
-          </button>
-        </nav>
-        <div className="sidebar-scroll">
-          <div className="section-label">
-            <span>STARRED</span>
-            <Star size={12} />
-          </div>
-          <div className="starred-list">
-            {live
-              .filter((n) => n.starred)
-              .map((n) => (
-                <button
-                  key={n.id}
-                  className="sidebar-note"
-                  onClick={() => openNote(n.id)}
-                >
-                  <FileText size={15} />
-                  <span>{n.title}</span>
-                </button>
-              ))}
-          </div>
-          <div className="section-label notes-label">
-            <span>YOUR VAULT</span>
-            <div>
-              <IconButton
-                label="Import Markdown files"
-                onClick={() => importer.current?.click()}
-              >
-                <Upload size={13} />
-              </IconButton>
-              <IconButton
-                label="New note"
-                onClick={() => {
-                  setNewTitle("");
-                  setModal("new");
-                }}
-              >
-                <Plus size={16} />
-              </IconButton>
-            </div>
-          </div>
-          {[...new Set([...folders, ...live.map((n) => n.folder)])].map(
-            (folder) => {
-              const items = live.filter((n) => n.folder === folder);
-              if (!items.length && folder === "Daily notes") return null;
-              const isCollapsed = collapsed.includes(folder);
-              return (
-                <div key={folder} className="folder-group">
-                  <button
-                    className="folder-row"
-                    onClick={() =>
-                      setCollapsed((c) =>
-                        c.includes(folder)
-                          ? c.filter((f) => f !== folder)
-                          : [...c, folder],
-                      )
-                    }
-                  >
-                    {isCollapsed ? (
-                      <ChevronRight size={13} />
-                    ) : (
-                      <ChevronDown size={13} />
-                    )}
-                    <span
-                      className={
-                        "folder-icon " + (folder === "Start here" ? "sage" : "")
-                      }
-                    >
-                      {isCollapsed ? (
-                        <Folder size={16} />
-                      ) : (
-                        <FolderOpen size={16} />
-                      )}
-                    </span>
-                    <span>{folder}</span>
-                    <small>{items.length}</small>
-                  </button>
-                  {!isCollapsed && (
-                    <div className="folder-children">
-                      {items.map((n) => (
-                        <button
-                          className={
-                            "tree-note " +
-                            (note?.id === n.id && view === "note"
-                              ? "current"
-                              : "")
-                          }
-                          key={n.id}
-                          onClick={() => openNote(n.id)}
-                        >
-                          <FileText size={14} />
-                          <span>{n.title}</span>
-                          {note?.id === n.id && view === "note" && (
-                            <span className="active-dot" />
-                          )}
-                        </button>
-                      ))}
-                      {!items.length && (
-                        <button
-                          className="empty-folder"
-                          onClick={() => {
-                            setNewFolder(folder);
-                            setModal("new");
-                          }}
-                        >
-                          + Add a note
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            },
-          )}
-          <button
-            className="new-note-sidebar"
-            onClick={() => {
-              setNewTitle("");
-              setModal("new");
-            }}
+          </IconButton>
+          <IconButton
+            label="Import Markdown files"
+            onClick={() => importer.current?.click()}
           >
-            <Plus size={16} /> New note <kbd>⌘ N</kbd>
-          </button>
+            <Upload size={17} />
+          </IconButton>
         </div>
-        <div className="sidebar-bottom">
-          {!user && (
-            <button
-              className="sync-card"
-              onClick={() => {
-                setModal("auth");
-                setAuthError("");
-              }}
-            >
-              <span className="sync-card-icon">
-                <Cloud size={19} />
-              </span>
-              <span>
-                <strong>A home on every device</strong>
-                <small>
-                  Turn on Bedrock sync <ArrowUpRight size={11} />
-                </small>
-              </span>
-            </button>
-          )}
-          <div className="sidebar-footer">
-            <button
-              className="user-button"
-              onClick={() => setModal(user ? "settings" : "auth")}
-            >
-              <span className="user-avatar">
-                {user?.name?.slice(0, 1).toUpperCase() || "Y"}
-              </span>
-              <span>{user?.name || "Your workspace"}</span>
-            </button>
-            <IconButton label="Settings" onClick={() => setModal("settings")}>
-              <Settings2 size={17} />
-            </IconButton>
-          </div>
+        <div className="sidebar-footer">
+          <button
+            className="vault-switch"
+            title="Vault settings"
+            onClick={() => setModal("settings")}
+          >
+            <span>Bedrock</span>
+            <ChevronsUpDown size={14} />
+          </button>
+          <IconButton
+            label="Sync"
+            onClick={() => setModal(user ? "settings" : "auth")}
+          >
+            <Cloud size={16} />
+          </IconButton>
+          <IconButton label="Help" onClick={() => setModal("help")}>
+            <CircleHelp size={16} />
+          </IconButton>
+          <IconButton label="Settings" onClick={() => setModal("settings")}>
+            <Settings size={16} />
+          </IconButton>
         </div>
       </aside>
       <main className="main-shell">
-        <header className="topbar">
-          <div className="breadcrumbs">
-            <IconButton
-              label="Toggle sidebar"
-              onClick={() => {
-                if (window.innerWidth <= 700) setSidebar(!sidebar);
-                else setSidebarHidden((v) => !v);
-                if (focus) setFocus(false);
-              }}
-            >
-              <PanelLeft size={17} />
-            </IconButton>
-            <span className="breadcrumb-vault">
-              {user ? `${user.name.split(" ")[0]}’s vault` : "Personal vault"}
-            </span>
-            <ChevronRight size={12} />
-            <span>
-              {view === "graph"
+        <div className="mobile-header">
+          <IconButton label="Toggle sidebar" onClick={toggleSidebar}>
+            <PanelLeft size={19} />
+          </IconButton>
+          <span>
+            {view === "note"
+              ? note?.title
+              : view === "graph"
                 ? "Graph view"
-                : view === "collection"
-                  ? filter
-                  : note?.folder || "Notes"}
-            </span>
-          </div>
-          <div className="top-actions">
-            <button
-              className={
-                "sync-status " + (syncStatus === "error" ? "error" : "")
-              }
-              onClick={() => {
-                if (!user) setModal("auth");
-                else vault.retrySync();
-              }}
-              title={vault.error || syncLabel}
-            >
-              {syncIcon}
-              <span>{syncLabel}</span>
-            </button>
-            <span className="top-divider" />
+                : filter}
+          </span>
+          <IconButton
+            label={editing ? "Reading view" : "Editing view"}
+            onClick={() => setEditing((v) => !v)}
+          >
+            {editing ? <BookOpen size={18} /> : <Pencil size={18} />}
+          </IconButton>
+          {view === "note" && note ? (
+            renderNoteOptions()
+          ) : (
             <IconButton
-              label="Toggle details panel"
-              active={!rightPanel}
-              onClick={() => setRightPanel(!rightPanel)}
+              label="Mobile settings"
+              onClick={() => setModal("settings")}
             >
-              <PanelRight size={17} />
+              <Settings size={19} />
             </IconButton>
-          </div>
-        </header>
+          )}
+        </div>
         <div className="tabs-row">
           <div className="tabs">
+            <div className="sidebar-reopen">
+              <IconButton label="Toggle sidebar" onClick={toggleSidebar}>
+                <PanelLeft size={16} />
+              </IconButton>
+            </div>
+            {view !== "note" && (
+              <div className="note-tab active utility-tab">
+                <button onClick={() => {}}>
+                  {view === "graph" ? (
+                    <Network size={14} />
+                  ) : (
+                    <Files size={14} />
+                  )}
+                  <span>{view === "graph" ? "Graph view" : filter}</span>
+                </button>
+                <button
+                  className="tab-close"
+                  aria-label="Close view"
+                  onClick={() => setView("note")}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
             {tabs.map((id) => {
               const n = live.find((x) => x.id === id);
               return (
@@ -761,18 +1126,81 @@ export default function App() {
             </IconButton>
           </div>
           <div className="tab-tools">
-            <span className="quiet-label">A little space for big ideas.</span>
+            <IconButton
+              label="Toggle details panel"
+              active={rightPanel}
+              onClick={() => {
+                if (window.innerWidth <= 900) openDetails(panelMode);
+                else setRightPanel((v) => !v);
+              }}
+            >
+              <PanelRight size={16} />
+            </IconButton>
           </div>
+          {rightPanel && view === "note" && note && (
+            <div className="pane-tab-header">
+              <div className="note-tab active">
+                <button onClick={() => setPanelMode("graph")}>
+                  {panelMode === "graph" ? (
+                    <GitBranch size={14} />
+                  ) : panelMode === "outline" ? (
+                    <List size={14} />
+                  ) : (
+                    <Link2 size={14} />
+                  )}
+                  <span>
+                    {panelMode === "graph"
+                      ? `Graph of ${note.title}`
+                      : panelMode === "outline"
+                        ? "Outline"
+                        : panelMode === "backlinks"
+                          ? "Backlinks"
+                          : "Outgoing links"}
+                  </span>
+                </button>
+                <button
+                  className="tab-close"
+                  aria-label="Close details"
+                  onClick={() => setRightPanel(false)}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <IconButton
+                label="Open full graph"
+                onClick={() => setView("graph")}
+              >
+                <Plus size={15} />
+              </IconButton>
+            </div>
+          )}
         </div>
         <div className="workspace">
           {view === "note" && note ? (
             <>
               <section className="document-pane">
                 <div className="document-toolbar">
+                  <div className="doc-history">
+                    <button
+                      aria-label="Go back"
+                      title="Go back"
+                      disabled={historyPosition.current === 0}
+                      onClick={() => goHistory(-1)}
+                    >
+                      <ArrowLeft size={16} />
+                    </button>
+                    <button
+                      aria-label="Go forward"
+                      title="Go forward"
+                      disabled={
+                        historyPosition.current >= history.current.length - 1
+                      }
+                      onClick={() => goHistory(1)}
+                    >
+                      <ArrowRight size={16} />
+                    </button>
+                  </div>
                   <div className="doc-location">
-                    <span className="doc-badge">
-                      <FileText size={12} />
-                    </span>
                     <span>{note.folder}</span>
                     <ChevronRight size={12} />
                     <span className="doc-title-small">{note.title}</span>
@@ -780,98 +1208,18 @@ export default function App() {
                   <div className="document-actions">
                     <button
                       className={"mode-toggle " + (editing ? "editing" : "")}
+                      aria-label={editing ? "Read" : "Edit"}
+                      title={editing ? "Reading view" : "Editing view"}
                       onClick={() => setEditing(!editing)}
                     >
                       {editing ? <BookOpen size={14} /> : <Pencil size={14} />}
                       <span>{editing ? "Read" : "Edit"}</span>
                     </button>
-                    <IconButton
-                      label={note.starred ? "Unstar note" : "Star note"}
-                      active={note.starred}
-                      onClick={() => update({ starred: !note.starred })}
-                    >
-                      <Star
-                        size={16}
-                        fill={note.starred ? "currentColor" : "none"}
-                      />
-                    </IconButton>
-                    <IconButton
-                      label="Focus mode"
-                      onClick={() => setFocus(!focus)}
-                    >
-                      <Maximize2 size={16} />
-                    </IconButton>
-                    <div className="menu-anchor">
-                      <IconButton
-                        label="Note options"
-                        onClick={() => setMenu(!menu)}
-                      >
-                        <MoreHorizontal size={19} />
-                      </IconButton>
-                      {menu && (
-                        <>
-                          <div
-                            className="menu-scrim"
-                            onClick={() => setMenu(false)}
-                          />
-                          <div className="dropdown">
-                            <button onClick={exportNote}>
-                              <ArrowDownToLine size={15} />
-                              Export Markdown
-                            </button>
-                            <button
-                              onClick={() => {
-                                create(
-                                  note.title + " (copy)",
-                                  note.folder,
-                                  note.content,
-                                );
-                                setMenu(false);
-                              }}
-                            >
-                              <Copy size={15} />
-                              Duplicate note
-                            </button>
-                            <button
-                              onClick={() => {
-                                navigator.clipboard
-                                  ?.writeText(note.content)
-                                  .then(() => notify("Note copied"));
-                                setMenu(false);
-                              }}
-                            >
-                              <Copy size={15} />
-                              Copy Markdown
-                            </button>
-                            <button
-                              className="danger"
-                              onClick={() => {
-                                vault.deleteNote(note.id);
-                                setMenu(false);
-                                notify("Moved to trash");
-                              }}
-                            >
-                              <Trash2 size={15} />
-                              Move to trash
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
+                    {renderNoteOptions()}
                   </div>
                 </div>
                 <article ref={article} className="document-scroll">
                   <div className="document-content">
-                    <div className="document-eyebrow">
-                      <span className="sprout-icon">
-                        <Sparkles size={20} strokeWidth={1.5} />
-                      </span>
-                      <span>
-                        {note.id === "welcome"
-                          ? "A FRESH BEGINNING"
-                          : note.folder.toUpperCase()}
-                      </span>
-                    </div>
                     <textarea
                       ref={titleInput}
                       className="note-title"
@@ -885,22 +1233,6 @@ export default function App() {
                           update({ title: "Untitled note" });
                       }}
                     />
-                    <div className="note-meta">
-                      <span>
-                        <CalendarDays size={13} />{" "}
-                        {dateFormat.format(note.updatedAt)}
-                      </span>
-                      <span className="metadata-dot">·</span>
-                      <span>
-                        {Math.max(
-                          1,
-                          Math.ceil(note.content.split(/\s+/).length / 200),
-                        )}{" "}
-                        min read
-                      </span>
-                      <span className="metadata-dot">·</span>
-                      <span>{note.folder}</span>
-                    </div>
                     <div className="note-tags">
                       {note.tags.map((tag) => (
                         <button
@@ -910,7 +1242,7 @@ export default function App() {
                             setView("collection");
                           }}
                         >
-                          <Hash size={11} />
+                          <span>#</span>
                           {tag}
                         </button>
                       ))}
@@ -933,57 +1265,26 @@ export default function App() {
                         />
                       </form>
                     </div>
-                    <div className="note-divider" />
                     {editing ? (
                       <div className="markdown-editor">
-                        <div className="format-toolbar">
-                          <IconButton
-                            label="Bold"
-                            onClick={() => format("**", "**")}
-                          >
-                            <Bold size={15} />
-                          </IconButton>
-                          <IconButton
-                            label="Italic"
-                            onClick={() => format("*", "*")}
-                          >
-                            <Italic size={15} />
-                          </IconButton>
-                          <IconButton
-                            label="Heading"
-                            onClick={() => format("\n## ")}
-                          >
-                            <Heading2 size={17} />
-                          </IconButton>
-                          <span />
-                          <IconButton
-                            label="Insert note link"
-                            onClick={() => format("[[", "]]")}
-                          >
-                            <Link2 size={16} />
-                          </IconButton>
-                          <IconButton
-                            label="Checklist"
-                            onClick={() => format("\n- [ ] ")}
-                          >
-                            <ListTodo size={17} />
-                          </IconButton>
-                          <IconButton
-                            label="Code"
-                            onClick={() => format("`", "`")}
-                          >
-                            <Code size={16} />
-                          </IconButton>
-                          <small>Markdown</small>
-                        </div>
                         <textarea
                           ref={editor}
                           className="source-editor"
                           aria-label="Note content"
-                          spellCheck
+                          spellCheck={spellcheck}
+                          onKeyDown={(e) => {
+                            if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+                              e.preventDefault();
+                              format("**", "**");
+                            }
+                            if ((e.metaKey || e.ctrlKey) && e.key === "i") {
+                              e.preventDefault();
+                              format("*", "*");
+                            }
+                          }}
                           value={note.content}
                           onChange={(e) => update({ content: e.target.value })}
-                          placeholder="Let a thought take shape…"
+                          placeholder="Start writing..."
                         />
                         <div className="editor-hint">
                           <span>Link ideas with [[note title]]</span>
@@ -1005,15 +1306,33 @@ export default function App() {
                                     )
                                   }
                                 >
-                                  <FileText size={14} />
                                   {children}
-                                  <ArrowUpRight size={12} />
                                 </button>
                               ) : (
                                 <a href={href} target="_blank" rel="noreferrer">
                                   {children}
                                 </a>
                               ),
+                            h1: ({ children }) => (
+                              <h1
+                                id={
+                                  "heading-" +
+                                  String(children).replace(/\W+/g, "-")
+                                }
+                              >
+                                {children}
+                              </h1>
+                            ),
+                            h3: ({ children }) => (
+                              <h3
+                                id={
+                                  "heading-" +
+                                  String(children).replace(/\W+/g, "-")
+                                }
+                              >
+                                {children}
+                              </h3>
+                            ),
                             h2: ({ children }) => (
                               <h2
                                 id={
@@ -1041,182 +1360,199 @@ export default function App() {
                         </ReactMarkdown>
                       </div>
                     )}
-                    {!editing && note.id === "welcome" && (
-                      <div className="begin-card">
-                        <div className="begin-symbol">
-                          <Pencil size={19} />
-                        </div>
-                        <div>
-                          <strong>What’s on your mind?</strong>
-                          <p>Your next idea deserves a note of its own.</p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setNewTitle("");
-                            setModal("new");
-                          }}
-                        >
-                          Create a note <ArrowRight size={14} />
-                        </button>
-                      </div>
-                    )}
-                    <div className="document-bottom">
-                      <span className="small-rock">
-                        <Rock small />
-                      </span>
-                      <span>A thought today. A connection tomorrow.</span>
-                    </div>
                   </div>
                 </article>
-                <footer className="editor-status">
-                  <span>
-                    {syncIcon} {syncLabel}
-                  </span>
-                  <div>
-                    <span>
-                      {note.content.trim().split(/\s+/).filter(Boolean).length}{" "}
-                      words
-                    </span>
-                    <span>{note.content.length} characters</span>
-                    <span>Markdown</span>
-                    <span className="status-dot" />
-                  </div>
-                </footer>
               </section>
               {rightPanel && (
-                <aside className="details-panel">
-                  <div className="details-top">
-                    <span>IN THIS NOTE</span>
+                <aside
+                  className={
+                    "details-panel" + (mobilePanel ? " mobile-visible" : "")
+                  }
+                >
+                  <div className="panel-mobile-heading">
+                    <span>
+                      {panelMode === "graph"
+                        ? "Local graph"
+                        : panelMode === "outline"
+                          ? "Outline"
+                          : panelMode === "backlinks"
+                            ? "Backlinks"
+                            : "Outgoing links"}
+                    </span>
                     <IconButton
-                      label="Close details"
-                      onClick={() => setRightPanel(false)}
+                      label="Close details panel"
+                      onClick={() => setMobilePanel(false)}
                     >
-                      <PanelRight size={15} />
+                      <X size={18} />
                     </IconButton>
                   </div>
-                  <div className="detail-section outline-section">
-                    <h3>
-                      <List size={15} /> Outline
-                    </h3>
-                    {headings.length ? (
-                      headings.map((h, i) => (
-                        <button
-                          key={h + i}
-                          className="outline-item"
-                          onClick={() => {
-                            if (editing) setEditing(false);
-                            setTimeout(
-                              () =>
-                                document
-                                  .getElementById(
-                                    "heading-" + h.replace(/\W+/g, "-"),
-                                  )
-                                  ?.scrollIntoView({
-                                    behavior: window.matchMedia(
-                                      "(prefers-reduced-motion: reduce)",
-                                    ).matches
-                                      ? "auto"
-                                      : "smooth",
-                                    block: "start",
-                                  }),
-                              20,
-                            );
-                          }}
-                        >
-                          <span />
-                          {h}
-                        </button>
-                      ))
-                    ) : (
-                      <p className="muted detail-empty">
-                        Headings will appear here.
-                      </p>
-                    )}
+                  <div className="panel-tools">
+                    <IconButton
+                      label="Local graph"
+                      active={panelMode === "graph"}
+                      onClick={() => setPanelMode("graph")}
+                    >
+                      <GitBranch size={16} />
+                    </IconButton>
+                    <IconButton
+                      label="Outline"
+                      active={panelMode === "outline"}
+                      onClick={() => setPanelMode("outline")}
+                    >
+                      <List size={16} />
+                    </IconButton>
+                    <IconButton
+                      label="Backlinks"
+                      active={panelMode === "backlinks"}
+                      onClick={() => setPanelMode("backlinks")}
+                    >
+                      <Link2 size={16} />
+                    </IconButton>
+                    <IconButton
+                      label="Outgoing links"
+                      active={panelMode === "links"}
+                      onClick={() => setPanelMode("links")}
+                    >
+                      <ArrowUpRight size={16} />
+                    </IconButton>
+                    <IconButton
+                      label="Expand graph"
+                      onClick={() => setView("graph")}
+                    >
+                      <Maximize2 size={15} />
+                    </IconButton>
                   </div>
-                  <div className="detail-section connections-section">
-                    <div className="detail-section-title">
-                      <h3>
-                        <Network size={15} /> Connections
-                      </h3>
-                      <IconButton
-                        label="Open full graph"
-                        onClick={() => setView("graph")}
-                      >
-                        <Maximize2 size={13} />
-                      </IconButton>
-                    </div>
-                    <div className="mini-graph">
+                  {panelMode === "graph" ? (
+                    <div className="local-graph-view">
                       <Graph
-                        notes={live}
+                        notes={localGraphNotes}
                         activeId={note.id}
                         onSelect={openNote}
-                        compact
+                        showLabels={false}
                       />
-                      <button
-                        className="graph-expand"
-                        onClick={() => setView("graph")}
-                      >
-                        Explore your graph <ArrowUpRight size={11} />
-                      </button>
                     </div>
-                    <div className="graph-caption">
-                      <span className="legend-dot" /> This note
-                      <span className="legend-dot pale" /> Connected ideas
+                  ) : (
+                    <div className="panel-content">
+                      {panelMode === "outline" && (
+                        <>
+                          <h3>Outline</h3>
+                          {headings.length ? (
+                            headings.map((h, i) => (
+                              <button
+                                key={h + i}
+                                className="outline-item"
+                                onClick={() => {
+                                  setEditing(false);
+                                  setTimeout(
+                                    () =>
+                                      document
+                                        .getElementById(
+                                          "heading-" + h.replace(/\W+/g, "-"),
+                                        )
+                                        ?.scrollIntoView({ block: "start" }),
+                                    20,
+                                  );
+                                }}
+                              >
+                                <ChevronRight size={12} />
+                                {h}
+                              </button>
+                            ))
+                          ) : (
+                            <p className="detail-empty">No headings found.</p>
+                          )}
+                        </>
+                      )}
+                      {panelMode === "backlinks" && (
+                        <>
+                          <h3>
+                            Linked mentions{" "}
+                            <span className="count-badge">
+                              {backlinks.length}
+                            </span>
+                          </h3>
+                          {backlinks.length ? (
+                            backlinks.map((n) => (
+                              <button
+                                key={n.id}
+                                className="backlink-card"
+                                onClick={() => openNote(n.id)}
+                              >
+                                <strong>{n.title}</strong>
+                                <p>
+                                  {n.content
+                                    .split("\n")
+                                    .filter(Boolean)
+                                    .find((line) =>
+                                      line
+                                        .toLowerCase()
+                                        .includes(note.title.toLowerCase()),
+                                    ) || n.content.slice(0, 100)}
+                                </p>
+                              </button>
+                            ))
+                          ) : (
+                            <p className="detail-empty">No backlinks found.</p>
+                          )}
+                          <h3 className="unlinked-heading">
+                            Unlinked mentions{" "}
+                            <span className="count-badge">
+                              {
+                                live.filter(
+                                  (n) =>
+                                    n.id !== note.id &&
+                                    !backlinks.some((b) => b.id === n.id) &&
+                                    n.content
+                                      .toLowerCase()
+                                      .includes(note.title.toLowerCase()),
+                                ).length
+                              }
+                            </span>
+                          </h3>
+                          {live
+                            .filter(
+                              (n) =>
+                                n.id !== note.id &&
+                                !backlinks.some((b) => b.id === n.id) &&
+                                n.content
+                                  .toLowerCase()
+                                  .includes(note.title.toLowerCase()),
+                            )
+                            .map((n) => (
+                              <button
+                                className="sidebar-note"
+                                key={n.id}
+                                onClick={() => openNote(n.id)}
+                              >
+                                <FileText size={14} />
+                                {n.title}
+                              </button>
+                            ))}
+                        </>
+                      )}
+                      {panelMode === "links" && (
+                        <>
+                          <h3>
+                            Outgoing links{" "}
+                            <span className="count-badge">{links.length}</span>
+                          </h3>
+                          {links.map((title, i) => (
+                            <button
+                              className="outline-item"
+                              key={title + i}
+                              onClick={() => inlineLink(title)}
+                            >
+                              <FileText size={14} />
+                              {title}
+                            </button>
+                          ))}
+                          {!links.length && (
+                            <p className="detail-empty">No outgoing links.</p>
+                          )}
+                        </>
+                      )}
                     </div>
-                  </div>
-                  <div className="detail-section backlinks">
-                    <div className="detail-section-title">
-                      <h3>
-                        <Link2 size={15} /> Backlinks
-                      </h3>
-                      <span className="count-badge">{backlinks.length}</span>
-                    </div>
-                    <p className="detail-helper">Notes that lead you here.</p>
-                    {backlinks.length ? (
-                      backlinks.map((n) => (
-                        <button
-                          className="backlink-card"
-                          key={n.id}
-                          onClick={() => openNote(n.id)}
-                        >
-                          <span>
-                            <FileText size={13} />
-                            <strong>{n.title}</strong>
-                          </span>
-                          <small>
-                            {n.folder} <ArrowUpRight size={12} />
-                          </small>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="detail-empty">
-                        Link to this note with [[{note.title}]] to start a
-                        connection.
-                      </p>
-                    )}
-                  </div>
-                  <div className="detail-section outgoing">
-                    <div className="detail-section-title">
-                      <h3>
-                        <ArrowUpRight size={15} /> Outgoing links
-                      </h3>
-                      <span className="count-badge">{links.length}</span>
-                    </div>
-                    {links.map((title, i) => (
-                      <button key={title + i} onClick={() => inlineLink(title)}>
-                        <FileText size={13} />
-                        <span>{title}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="sidebar-tip">
-                    <span>✧</span>
-                    <p>
-                      Ideas grow stronger
-                      <br />
-                      when they’re connected.
-                    </p>
-                  </div>
+                  )}
                 </aside>
               )}
             </>
@@ -1224,9 +1560,7 @@ export default function App() {
             <section className="graph-page">
               <div className="page-heading">
                 <div>
-                  <div className="page-eyebrow">THE BIGGER PICTURE</div>
-                  <h1>Your thoughts, connected.</h1>
-                  <p>Follow a thread. See where it takes you.</p>
+                  <h1>Graph view</h1>
                 </div>
                 <button className="soft-button" onClick={() => setView("note")}>
                   <FileText size={15} /> Back to note
@@ -1287,12 +1621,11 @@ export default function App() {
             <section className="collection-page">
               <div className="page-heading">
                 <div>
-                  <div className="page-eyebrow">YOUR PERSONAL LIBRARY</div>
                   <h1>{filter}</h1>
                   <p>
                     {filter === "Trash"
-                      ? "A second chance for your thoughts."
-                      : `${listed.length} little seeds of something bigger.`}
+                      ? "Deleted notes can be restored here."
+                      : `${listed.length} files`}
                   </p>
                 </div>
                 <button
@@ -1354,7 +1687,7 @@ export default function App() {
                       <h3>{n.title}</h3>
                       <p>
                         {n.content.replace(/[#*>`\[\]]/g, "").slice(0, 145) ||
-                          "A little room for your next idea…"}
+                          "Empty note"}
                       </p>
                       <div>
                         <span>{n.deleted ? "Click to restore" : n.folder}</span>
@@ -1366,17 +1699,95 @@ export default function App() {
               {!listed.length && (
                 <div className="empty-state">
                   <BookOpen size={34} />
-                  <h2>A little room to grow.</h2>
+                  <h2>No files found.</h2>
                   <p>
                     {filter === "Trash"
                       ? "Your trash is empty."
-                      : "Your notes will appear here."}
+                      : "Create a new note to get started."}
                   </p>
                 </div>
               )}
             </section>
           )}
         </div>
+        <footer className="editor-status">
+          <button
+            className={"sync-status " + (syncStatus === "error" ? "error" : "")}
+            title={vault.error || syncLabel}
+            onClick={() => {
+              if (!user) setModal("auth");
+              else vault.retrySync();
+            }}
+          >
+            {syncIcon}
+            <span>{syncLabel}</span>
+          </button>
+          <div>
+            {note && (
+              <>
+                <button
+                  onClick={() => {
+                    openDetails("backlinks");
+                  }}
+                >
+                  {backlinks.length}{" "}
+                  {backlinks.length === 1 ? "backlink" : "backlinks"}
+                </button>
+                <span>
+                  {note.content.trim().split(/\s+/).filter(Boolean).length}{" "}
+                  words
+                </span>
+                <span>{note.content.length} characters</span>
+              </>
+            )}
+          </div>
+        </footer>
+        <nav className="mobile-navigation">
+          <button
+            aria-label="Navigate back"
+            disabled={historyPosition.current === 0}
+            onClick={() => goHistory(-1)}
+          >
+            <ArrowLeft size={19} />
+          </button>
+          <button
+            aria-label="Navigate forward"
+            disabled={historyPosition.current >= history.current.length - 1}
+            onClick={() => goHistory(1)}
+          >
+            <ArrowRight size={19} />
+          </button>
+          <button
+            aria-label="Quick switcher"
+            onClick={() => {
+              setQuery("");
+              setModal("search");
+            }}
+          >
+            <Search size={19} />
+          </button>
+          <button
+            aria-label="New note"
+            onClick={() => {
+              setNewTitle("");
+              setModal("new");
+            }}
+          >
+            <Plus size={21} />
+          </button>
+          <button
+            aria-label="All notes"
+            onClick={() => {
+              setFilter("All notes");
+              setView("collection");
+            }}
+          >
+            <Files size={19} />
+          </button>
+          <button aria-label="Open navigation" onClick={() => setSidebar(true)}>
+            <Menu size={21} />
+          </button>
+        </nav>
       </main>
       <input
         type="file"
@@ -1396,13 +1807,18 @@ export default function App() {
         </div>
       )}
       {modal === "search" && (
-        <Modal title="Find a thought" onClose={() => setModal(null)} wide>
+        <Modal title="Quick switcher" onClose={() => setModal(null)} wide>
           <div className="command-input">
             <Search size={20} />
             <input
               aria-label="Search your vault"
               autoFocus
-              placeholder="Search notes, ideas, or anything in between…"
+              placeholder="Type to search your vault..."
+              onKeyDown={(e) =>
+                navigateResults(e, results.length, () =>
+                  openNote(results[Math.max(0, selection)].id),
+                )
+              }
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -1412,8 +1828,13 @@ export default function App() {
             <div className="command-label">
               {query ? "MATCHING NOTES" : "YOUR NOTES"}
             </div>
-            {results.map((n) => (
-              <button key={n.id} onClick={() => openNote(n.id)}>
+            {results.map((n, i) => (
+              <button
+                className={selection === i ? "is-selected" : ""}
+                onMouseEnter={() => setSelection(i)}
+                key={n.id}
+                onClick={() => openNote(n.id)}
+              >
                 <FileText size={17} />
                 <span>
                   <strong>{n.title}</strong>
@@ -1423,9 +1844,7 @@ export default function App() {
               </button>
             ))}
             {!results.length && (
-              <div className="search-empty">
-                No notes found. A new idea, perhaps?
-              </div>
+              <div className="search-empty">No matching files found.</div>
             )}
           </div>
           <div className="command-footer">
@@ -1442,9 +1861,51 @@ export default function App() {
           </div>
         </Modal>
       )}
+      {modal === "commands" && (
+        <Modal title="Command palette" onClose={() => setModal(null)} wide>
+          <div className="command-input">
+            <Terminal size={18} />
+            <input
+              aria-label="Search commands"
+              autoFocus
+              placeholder="Type a command..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) =>
+                navigateResults(e, commandActions.length, () =>
+                  commandActions[Math.max(0, selection)].run(),
+                )
+              }
+            />
+          </div>
+          <div className="command-results">
+            {commandActions.map((command, i) => (
+              <button
+                className={i === selection ? "is-selected" : ""}
+                key={command.title}
+                onMouseEnter={() => setSelection(i)}
+                onClick={command.run}
+              >
+                <span>
+                  <strong>{command.title}</strong>
+                </span>
+                {command.hint && <kbd>{command.hint}</kbd>}
+              </button>
+            ))}
+            {!commandActions.length && (
+              <div className="search-empty">No commands found.</div>
+            )}
+          </div>
+          <div className="command-footer">
+            <span>↑↓ to navigate · Enter to execute · Esc to dismiss</span>
+          </div>
+        </Modal>
+      )}
       {modal === "new" && (
-        <Modal title="A new beginning" onClose={() => setModal(null)}>
-          <p className="modal-subtitle">Every idea starts somewhere.</p>
+        <Modal title="New note" onClose={() => setModal(null)}>
+          <p className="modal-subtitle">
+            Create a Markdown note in your vault.
+          </p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -1456,7 +1917,7 @@ export default function App() {
               Note title
               <input
                 autoFocus
-                placeholder="What’s on your mind?"
+                placeholder="Untitled"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 maxLength={200}
@@ -1468,7 +1929,7 @@ export default function App() {
                 value={newFolder}
                 onChange={(e) => setNewFolder(e.target.value)}
               >
-                {folders.map((f) => (
+                {allFolders.map((f) => (
                   <option key={f}>{f}</option>
                 ))}
               </select>
@@ -1480,12 +1941,51 @@ export default function App() {
           </form>
         </Modal>
       )}
+      {modal === "folder" && (
+        <Modal title="New folder" onClose={() => setModal(null)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = folderDraft.trim();
+              if (!name) return;
+              if (allFolders.includes(name)) {
+                notify("A folder with this name already exists");
+                return;
+              }
+              const next = [...extraFolders, name];
+              setExtraFolders(next);
+              localStorage.setItem(
+                "bedrock-folders:" + (user?.id || "guest"),
+                JSON.stringify(next),
+              );
+              setCollapsed((c) => c.filter((f) => f !== name));
+              setSidebarMode("files");
+              setModal(null);
+            }}
+          >
+            <label className="field-label">
+              Folder name
+              <input
+                autoFocus
+                maxLength={100}
+                required
+                value={folderDraft}
+                onChange={(e) => setFolderDraft(e.target.value)}
+                placeholder="Untitled folder"
+              />
+            </label>
+            <button className="primary-button full-width" type="submit">
+              Create folder
+            </button>
+          </form>
+        </Modal>
+      )}
       {modal === "auth" && (
         <Modal
           title={
             authMode === "register"
-              ? "Your thoughts. Everywhere."
-              : "Welcome back."
+              ? "Create a Bedrock account"
+              : "Sign in to Bedrock"
           }
           onClose={() => {
             if (!busy) setModal(null);
@@ -1610,115 +2110,63 @@ export default function App() {
         </Modal>
       )}
       {modal === "settings" && (
-        <Modal title="Make yourself at home" onClose={() => setModal(null)}>
-          <div className="settings-section">
-            <label>Appearance</label>
-            <div className="theme-options">
-              <button
-                className={theme === "light" ? "active" : ""}
-                onClick={() => setTheme("light")}
-              >
-                <Sun size={18} /> Daylight{" "}
-                {theme === "light" && <Check size={14} />}
-              </button>
-              <button
-                className={theme === "dark" ? "active" : ""}
-                onClick={() => setTheme("dark")}
-              >
-                <Moon size={18} /> After hours{" "}
-                {theme === "dark" && <Check size={14} />}
-              </button>
-            </div>
-          </div>
-          <div className="settings-section">
-            <label>Your vault</label>
-            <p>
-              {user
-                ? `Signed in as ${user.email}`
-                : "Your notes are saved in this browser. Sign in to sync them across devices."}
-            </p>
-            {user ? (
-              <>
-                <div className="settings-sync">
-                  {syncIcon}
-                  {syncLabel}
-                </div>
-                <button
-                  className="soft-button"
-                  onClick={async () => {
-                    try {
-                      await vault.logout();
-                      setModal(null);
-                      notify("Signed out");
-                    } catch (e) {
-                      notify(
-                        e instanceof Error ? e.message : "Could not sign out",
-                      );
-                    }
-                  }}
-                >
-                  <LogOut size={15} />
-                  Sign out
-                </button>
-              </>
-            ) : (
-              <button
-                className="primary-button"
-                onClick={() => setModal("auth")}
-              >
-                <Cloud size={15} />
-                Turn on sync
-              </button>
-            )}
-          </div>
-          <div className="settings-section">
-            <label>Your notes belong to you</label>
-            <div className="settings-rows">
-              <button onClick={() => importer.current?.click()}>
-                <Upload size={16} />
-                <span>Import Markdown files</span>
-                <ChevronRight size={15} />
-              </button>
-              <button
-                onClick={() => {
-                  download(
-                    "bedrock-vault.json",
-                    JSON.stringify(
-                      {
-                        name: "Bedrock vault",
-                        exportedAt: new Date().toISOString(),
-                        notes: live,
-                      },
-                      null,
-                      2,
-                    ),
-                    "application/json",
-                  );
-                  notify("Vault exported");
-                }}
-              >
-                <ArrowDownToLine size={16} />
-                <span>Export your vault</span>
-                <ChevronRight size={15} />
-              </button>
-              <button onClick={() => setModal("help")}>
-                <CircleHelp size={16} />
-                <span>Keyboard shortcuts</span>
-                <ChevronRight size={15} />
-              </button>
-            </div>
-          </div>
-          <div className="settings-brand">
-            <Rock small /> Bedrock <span>A space to think. v1.0</span>
-          </div>
+        <Modal
+          title="Settings"
+          wide
+          className="settings-dialog"
+          onClose={() => setModal(null)}
+        >
+          <SettingsPanel
+            theme={theme}
+            onTheme={setTheme}
+            user={user}
+            syncLabel={syncLabel}
+            onSignIn={() => {
+              setAuthMode("login");
+              setAuthError("");
+              setModal("auth");
+            }}
+            onLogout={async () => {
+              await vault.logout();
+              setModal(null);
+              notify("Signed out");
+            }}
+            onImport={() => importer.current?.click()}
+            onExport={() => {
+              download(
+                "bedrock-vault.json",
+                JSON.stringify(
+                  {
+                    name: "Bedrock vault",
+                    exportedAt: new Date().toISOString(),
+                    notes: live,
+                  },
+                  null,
+                  2,
+                ),
+                "application/json",
+              );
+              notify("Vault exported");
+            }}
+            onHelp={() => setModal("help")}
+            readableWidth={readableWidth}
+            onReadableWidth={setReadableWidth}
+            fontSize={fontSize}
+            onFontSize={setFontSize}
+            spellcheck={spellcheck}
+            onSpellcheck={setSpellcheck}
+          />
         </Modal>
       )}
       {modal === "help" && (
-        <Modal title="A few little shortcuts" onClose={() => setModal(null)}>
-          <p className="modal-subtitle">Stay in the flow.</p>
+        <Modal title="Keyboard shortcuts" onClose={() => setModal(null)}>
+          <p className="modal-subtitle">
+            Use these shortcuts to navigate your vault.
+          </p>
           <div className="shortcut-list">
             {[
-              ["Find anything", "⌘ / Ctrl K"],
+              ["Open quick switcher", "⌘ / Ctrl O"],
+              ["Command palette", "⌘ / Ctrl P"],
               ["Create a note", "⌘ / Ctrl N"],
               ["Edit / read a note", "⌘ / Ctrl E"],
               ["Close a dialog", "Esc"],

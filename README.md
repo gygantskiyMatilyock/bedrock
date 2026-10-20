@@ -1,6 +1,6 @@
 # Bedrock
 
-A calm, Obsidian-inspired web workspace for connected notes. Built with React, TypeScript, Vite, Bun, and SQLite.
+A web workspace modeled on Obsidian's app interface, with charcoal panes, compact tabs, purple links, a file explorer, and a graph beside the editor. Built with React, TypeScript, Vite, Bun, and SQLite.
 
 ## Features
 
@@ -8,7 +8,8 @@ A calm, Obsidian-inspired web workspace for connected notes. Built with React, T
 - Private accounts with automatic sync across devices, offline caching, and conflict copies
 - Notes, folders, tags, stars, daily notes, search, tabs, focus mode, and trash/restore
 - Markdown import and export, vault JSON export, light and dark themes
-- Responsive layout, keyboard shortcuts, reduced-motion support
+- Responsive layout, quick switcher, command palette, reduced-motion support
+- Settings for theme, editor font size, spellcheck, and readable line length
 
 ## Run
 
@@ -24,10 +25,10 @@ DB_PATH=./bedrock.sqlite npm start
 
 ```sh
 npx bun test tests/backend.test.ts
-npx playwright test tests/sync.spec.ts
+npm run test:e2e
 ```
 
-The browser sync tests require a running backend on port 3000 and installed Chromium (`npx playwright install chromium`).
+The browser tests require a running backend on port 3000 and installed Chromium (`npx playwright install chromium`). Set `BEDROCK_TEST_URL` to test a deployed environment.
 
 ## Deploy
 
@@ -41,8 +42,8 @@ Passwords are Argon2id-hashed and sessions use HTTPOnly cookies. Password recove
 
 ## Design references
 
-- [Emil Kowalski's design-engineering skill](https://github.com/emilkowalski/skills/blob/main/skills/emil-design-eng/SKILL.md)
-- [Evernote editor on Mobbin](https://mobbin.com/screens/d9b96113-1f32-486d-9235-23ed5551de6b)
-- [mymind editor on Mobbin](https://mobbin.com/screens/4df2e914-3742-4b59-bda4-a52ed23ee990)
+- [Obsidian's official app preview](https://obsidian.md/) supplies the current workspace layout, dimensions, colors, typography, tabs, and graph styling.
+- [Obsidian workspace documentation](https://obsidian.md/help/workspace) and [mobile documentation](https://obsidian.md/help/mobile) inform navigation.
+- [Emil Kowalski's design-engineering skill](https://github.com/emilkowalski/skills/blob/main/skills/emil-design-eng/SKILL.md) informs interaction and motion.
 
-Motion is intentionally restrained, with immediate keyboard interactions and reduced-motion overrides.
+The earlier design used Evernote and mymind references from Mobbin; the current interface follows the user's subsequent request for Obsidian. Motion is restrained, with immediate keyboard interactions and reduced-motion overrides. See `design-qa.md` for reference comparisons and validation.
