@@ -9,6 +9,8 @@ type SettingsPanelProps = {
   onTheme: (value: string) => void;
   accent: string;
   onAccent: (value: string) => void;
+  pageFont: string;
+  onPageFont: (value: string) => void;
   user: User | null;
   syncLabel: string;
   onSignIn: () => void;
@@ -30,6 +32,12 @@ const accents = [
   { id: "green", label: "Green", color: "#16a34a" },
   { id: "amber", label: "Amber", color: "#e8890c" },
   { id: "rose", label: "Rose", color: "#e5487b" },
+];
+
+const pageFonts = [
+  { id: "sans", label: "Sans" },
+  { id: "serif", label: "Serif" },
+  { id: "mono", label: "Mono" },
 ];
 
 function SettingRow({
@@ -92,6 +100,8 @@ export default function SettingsPanel({
   onTheme,
   accent,
   onAccent,
+  pageFont,
+  onPageFont,
   user,
   syncLabel,
   onSignIn,
@@ -179,6 +189,36 @@ export default function SettingsPanel({
                   <option value="light">Light</option>
                   <option value="dark">Dark</option>
                 </select>
+              }
+            />
+            <SettingRow
+              name="Page font"
+              description="Choose how your notes are typeset."
+              labelId="settings-page-font-label"
+              control={
+                <div
+                  className="font-options"
+                  role="radiogroup"
+                  aria-labelledby="settings-page-font-label"
+                >
+                  {pageFonts.map((option) => (
+                    <button
+                      type="button"
+                      key={option.id}
+                      role="radio"
+                      aria-checked={pageFont === option.id}
+                      className={
+                        "font-option font-" +
+                        option.id +
+                        (pageFont === option.id ? " selected" : "")
+                      }
+                      onClick={() => onPageFont(option.id)}
+                    >
+                      <span aria-hidden="true">Ag</span>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               }
             />
             <SettingRow

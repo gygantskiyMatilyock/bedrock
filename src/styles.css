@@ -1,9 +1,11 @@
 @import "@fontsource-variable/inter";
+@import "@fontsource-variable/newsreader";
 
 /* ─── Design tokens ──────────────────────────────────────────────
-   Notion's warm paper surfaces and generous spacing, Obsidian's linked
-   thinking and violet links. Every colour is a token so both themes and
-   all accents stay in sync. */
+   Craft's shell (a paper card floating on a soft canvas), Notion's
+   type scale and ink, Obsidian's reading column and violet links. Ink,
+   sidebar and link values were measured from live Notion and Obsidian
+   Publish pages; see design-qa.md. */
 :root {
   --font-ui:
     "Inter Variable", ui-sans-serif, system-ui, -apple-system,
@@ -20,15 +22,16 @@
   -moz-osx-font-smoothing: grayscale;
   color-scheme: light;
 
+  --canvas: #f3f2ef;
   --bg: #ffffff;
-  --sidebar: #f8f7f4;
+  --sidebar: var(--canvas);
   --raised: #ffffff;
-  --sunken: #f4f3ef;
-  --callout: #f6f5f2;
-  --text: #2f2d29;
-  --body: #3d3b36;
-  --muted: #7a776f;
-  --faint: #a9a69e;
+  --sunken: #f7f6f3;
+  --callout: #f7f6f3;
+  --text: #2c2c2b;
+  --body: #2c2c2b;
+  --muted: #5f5e59;
+  --faint: #9b9a94;
   --border: rgb(55 53 47 / 9%);
   --border-strong: rgb(55 53 47 / 16%);
   --hover: rgb(55 53 47 / 5.5%);
@@ -41,7 +44,7 @@
   --toast-bg: #2f2d29;
   --toast-text: #f8f7f4;
 
-  --accent: #7c5cff;
+  --accent: #8a5cf5;
   --accent-2: #e879f9;
   --accent-text: color-mix(in srgb, var(--accent) 82%, #1a1033);
   --accent-soft: color-mix(in srgb, var(--accent) 11%, transparent);
@@ -55,6 +58,9 @@
   --graph-surface: var(--sunken);
 
   --shadow-sm: 0 1px 2px rgb(15 15 15 / 6%), 0 0 0 1px rgb(15 15 15 / 4%);
+  --shadow-paper:
+    0 0 0 1px rgb(15 15 15 / 5%), 0 1px 2px rgb(15 15 15 / 4%),
+    0 12px 32px -16px rgb(15 15 15 / 12%);
   --shadow-md:
     0 4px 12px -2px rgb(15 15 15 / 8%), 0 0 0 1px rgb(15 15 15 / 5%);
   --shadow-lg:
@@ -68,19 +74,20 @@
   --ease: cubic-bezier(0.23, 1, 0.32, 1);
   --sidebar-width: 256px;
   --panel-width: 304px;
-  --page-width: 720px;
+  --page-width: 704px;
+  --paper-radius: 14px;
 }
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #191919;
-  --sidebar: #1f1f1f;
+  --canvas: #131313;
+  --bg: #1c1c1c;
   --raised: #252525;
-  --sunken: #151515;
+  --sunken: #181818;
   --callout: #232323;
   --text: #ebeae6;
   --body: #d3d2cd;
-  --muted: #9b9993;
-  --faint: #67655f;
+  --muted: #a3a29c;
+  --faint: #6b6a65;
   --border: rgb(255 255 255 / 7.5%);
   --border-strong: rgb(255 255 255 / 13%);
   --hover: rgb(255 255 255 / 5.5%);
@@ -98,6 +105,7 @@
   --graph-edge-color: #3a3936;
   --graph-edge-active: color-mix(in srgb, var(--accent) 55%, #3a3936);
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%), 0 0 0 1px rgb(255 255 255 / 5%);
+  --shadow-paper: 0 0 0 1px rgb(255 255 255 / 6%), 0 12px 32px -12px rgb(0 0 0 / 60%);
   --shadow-md: 0 6px 16px -4px rgb(0 0 0 / 45%), 0 0 0 1px rgb(255 255 255 / 6%);
   --shadow-lg:
     0 28px 56px -12px rgb(0 0 0 / 65%), 0 0 0 1px rgb(255 255 255 / 8%);
@@ -315,14 +323,13 @@ kbd {
   width: 100%;
   height: 100dvh;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--canvas);
 }
 .main-shell {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
 }
 .mobile-header,
 .mobile-navigation,
@@ -338,8 +345,7 @@ kbd {
   flex: none;
   display: flex;
   flex-direction: column;
-  background: var(--sidebar);
-  border-right: 1px solid var(--border);
+  background: var(--canvas);
   min-height: 0;
   user-select: none;
 }
@@ -550,6 +556,10 @@ kbd {
   text-align: left;
   transition: background 0.1s ease;
 }
+.sidebar .current,
+.nav-row.active {
+  box-shadow: none;
+}
 .tree-note > span:last-child,
 .favorite-note > span:last-child,
 .sidebar-note > span:last-child,
@@ -703,22 +713,16 @@ kbd {
 .sidebar-footer {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 8px;
-  border-top: 1px solid var(--border);
+  gap: 0;
+  padding: 10px 8px 12px;
 }
-.account-chip {
+.account {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 5px 6px;
-  border-radius: var(--radius);
-  text-align: left;
-}
-.account-chip:hover {
-  background: var(--hover);
+  padding: 0 4px;
 }
 .avatar {
   display: grid;
@@ -739,7 +743,7 @@ kbd {
   line-height: 1.25;
 }
 .account-text strong,
-.account-text small {
+.account-text .sync-status span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -748,28 +752,43 @@ kbd {
   font-size: 13px;
   font-weight: 600;
 }
-.account-text small {
+.account-text .sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
   font-size: 11.5px;
   color: var(--faint);
+  text-align: left;
+}
+.account-text .sync-status:hover {
+  color: var(--text);
+}
+.account-text .sync-status svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+.sync-status.error {
+  color: #e5484d;
 }
 
-/* ─── Tabs ───────────────────────────────────────────────────── */
+/* ─── Tabs ─────────────────────────────────────────────────────
+   Compact pills on the canvas, as in Craft's and Arc's title bars. */
 .tabs-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
-  height: 42px;
+  height: 48px;
   flex: none;
-  padding: 0 8px 0 6px;
-  background: var(--sidebar);
-  border-bottom: 1px solid var(--border);
+  padding: 0 10px 0 2px;
 }
 .tabs {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: flex-end;
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
   height: 100%;
   overflow-x: auto;
   scrollbar-width: none;
@@ -779,8 +798,7 @@ kbd {
 }
 .sidebar-reopen {
   display: none;
-  align-self: center;
-  margin-right: 4px;
+  margin: 0 4px 0 8px;
 }
 .sidebar-hidden .sidebar-reopen,
 .focus-mode .sidebar-reopen {
@@ -790,38 +808,27 @@ kbd {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 0 1 200px;
+  flex: 0 1 190px;
   min-width: 96px;
-  height: 34px;
+  height: 32px;
   padding: 0 4px 0 10px;
-  border-radius: 9px 9px 0 0;
+  border-radius: 9px;
   color: var(--muted);
   font-size: 13px;
   transition:
     background 0.12s ease,
-    color 0.12s ease;
+    color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 .note-tab:not(.active):hover {
   background: var(--hover);
   color: var(--text);
 }
-.note-tab:not(.active) + .note-tab:not(.active)::before {
-  content: "";
-  position: absolute;
-  left: -1px;
-  top: 10px;
-  bottom: 10px;
-  width: 1px;
-  background: var(--border-strong);
-}
 .note-tab.active {
   background: var(--bg);
   color: var(--text);
   font-weight: 500;
-  box-shadow:
-    0 0 0 1px var(--border),
-    0 -2px 8px -4px rgb(15 15 15 / 8%);
-  clip-path: inset(-10px -10px 0 -10px);
+  box-shadow: var(--shadow-sm);
 }
 .note-tab > button:first-child {
   flex: 1;
@@ -869,12 +876,27 @@ kbd {
   flex: 1;
   min-height: 0;
   display: flex;
+  gap: 8px;
+  padding: 0 10px 10px 0;
+}
+.sidebar-hidden .workspace,
+.focus-mode .workspace {
+  padding-left: 10px;
+}
+/* The note is a sheet of paper resting on the canvas. */
+.document-pane,
+.collection-page,
+.graph-page {
+  border-radius: var(--paper-radius);
+  background: var(--bg);
+  box-shadow: var(--shadow-paper);
 }
 .document-pane {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .document-toolbar {
   position: relative;
@@ -1049,24 +1071,6 @@ kbd {
   min-height: 0;
   overflow-y: auto;
   scroll-behavior: smooth;
-}
-.document-scroll:not(.has-cover)::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 260px;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      ellipse 60% 100% at 30% 0%,
-      var(--accent-softer),
-      transparent 70%
-    ),
-    radial-gradient(
-      ellipse 40% 80% at 75% 0%,
-      color-mix(in srgb, var(--accent-2) 6%, transparent),
-      transparent 70%
-    );
 }
 .page-cover {
   position: relative;
@@ -1321,64 +1325,66 @@ kbd {
   opacity: 0.6;
 }
 
-/* Properties: Obsidian's frontmatter meets Notion's page properties. */
-.properties {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  margin: 0 0 22px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--border);
-}
-.property {
-  display: flex;
-  align-items: flex-start;
-  min-height: 32px;
-  border-radius: var(--radius-sm);
-}
-.property-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-  width: 148px;
-  height: 32px;
-  padding: 0 6px;
-  color: var(--muted);
-  font-size: 14px;
-}
-.property-name svg {
-  color: var(--faint);
-}
-.property-value {
-  flex: 1;
-  min-width: 0;
+/* One quiet line of metadata instead of a property table. */
+.page-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  padding: 3px 6px;
+  gap: 6px;
+  margin: 0 0 28px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+}
+.meta-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
   border-radius: var(--radius-sm);
-  font-size: 14px;
-  color: var(--text);
-}
-.property:hover .property-value {
   background: var(--hover);
+  color: var(--muted);
+  cursor: pointer;
 }
-.folder-select {
+.meta-folder:hover {
+  background: var(--active);
+}
+.meta-folder select {
   appearance: none;
   field-sizing: content;
-  height: 24px;
-  padding: 0 8px;
   border: 0;
-  border-radius: 5px;
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  outline: 0;
+  background: none;
+  color: var(--text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  outline-offset: 1px;
+}
+.meta-folder:focus-within {
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+.page-meta .note-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.meta-backlinks {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 13px;
+}
+.meta-backlinks:hover {
+  background: var(--hover);
+  color: var(--accent-text);
 }
 .tag-chip {
   display: inline-flex;
@@ -1414,11 +1420,14 @@ kbd {
 .note-tags form {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  height: 24px;
-  padding: 0 6px;
-  border-radius: 12px;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
   color: var(--faint);
+}
+.note-tags form:hover {
+  background: var(--hover);
 }
 .note-tags form:focus-within {
   background: var(--bg);
@@ -1435,33 +1444,6 @@ kbd {
 .note-tags input::placeholder {
   color: var(--faint);
 }
-.mention-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 220px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 5px;
-  font-size: 13px;
-  color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mention-chip:hover {
-  background: var(--bg);
-  color: var(--accent-text);
-}
-.mention-more {
-  height: 24px;
-  padding: 0 7px;
-  border-radius: 5px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
 /* Prose */
 .prose {
   color: var(--body);
@@ -1494,9 +1476,11 @@ kbd {
   margin: 1.6em 0 0.4em;
 }
 .prose h2 {
-  font-size: 1.45em;
+  font-size: 1.5em;
   font-weight: 650;
-  margin: 1.55em 0 0.35em;
+  margin: 1.6em 0 0.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
 }
 .prose h3 {
   font-size: 1.2em;
@@ -1643,7 +1627,7 @@ kbd {
   margin: 0 -1px;
   border-radius: 4px;
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--accent-text);
   text-decoration: underline;
   text-decoration-color: var(--accent-ring);
@@ -1721,15 +1705,67 @@ kbd {
   margin: 0 3px;
   background: var(--border-strong);
 }
-.source-editor {
-  width: 100%;
+.source-surface {
+  position: relative;
   min-height: 52vh;
+}
+.source-tint,
+.source-editor {
+  display: block;
+  width: 100%;
+  margin: 0;
   padding: 0;
   border: 0;
+  font-family: var(--font-ui);
+  font-size: var(--editor-font-size, 16px);
+  line-height: 1.72;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  tab-size: 4;
+}
+.source-tint {
+  position: absolute;
+  inset: 0 0 auto 0;
+  color: var(--body);
+  pointer-events: none;
+}
+.source-tint .md-mark,
+.source-tint .md-bullet,
+.source-tint .md-check {
+  color: var(--faint);
+}
+.source-tint .md-heading {
+  color: var(--text);
+  text-shadow: 0.35px 0 0 currentColor;
+}
+.source-tint .md-link,
+.source-tint .md-tag {
+  color: var(--accent-text);
+}
+.source-tint .md-code {
+  color: var(--code-text);
+}
+.source-tint .md-strong {
+  color: var(--text);
+  text-shadow: 0.35px 0 0 currentColor;
+}
+.source-tint .md-quote {
+  color: var(--muted);
+}
+.source-tint .md-done {
+  color: var(--faint);
+}
+.source-editor {
+  position: relative;
+  min-height: 52vh;
+  overflow: hidden;
   outline: 0;
   resize: none;
   background: none;
-  color: var(--body);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
   font-size: var(--editor-font-size, 16px);
   line-height: 1.72;
   caret-color: var(--accent);
@@ -1737,6 +1773,7 @@ kbd {
 }
 .source-editor::placeholder {
   color: var(--faint);
+  -webkit-text-fill-color: var(--faint);
 }
 .editor-hint {
   display: flex;
@@ -1762,8 +1799,7 @@ kbd {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-left: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--canvas);
 }
 .panel-tools {
   display: flex;
@@ -1826,8 +1862,8 @@ kbd {
   overflow: hidden;
   background:
     radial-gradient(circle at 50% 50%, var(--accent-softer), transparent 70%),
-    var(--sunken);
-  box-shadow: inset 0 0 0 1px var(--border);
+    var(--bg);
+  box-shadow: var(--shadow-sm);
 }
 .graph-facts {
   display: grid;
@@ -1840,7 +1876,8 @@ kbd {
   align-items: flex-start;
   padding: 10px 12px;
   border-radius: var(--radius);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--bg);
+  box-shadow: var(--shadow-sm);
   text-align: left;
 }
 .graph-facts button:hover {
@@ -1900,7 +1937,8 @@ kbd {
   padding: 10px 12px;
   border-radius: var(--radius);
   text-align: left;
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--bg);
+  box-shadow: var(--shadow-sm);
   transition:
     background 0.12s ease,
     box-shadow 0.12s ease;
@@ -2017,6 +2055,7 @@ kbd {
     var(--sunken);
 }
 .recent-icon {
+  position: relative;
   display: grid;
   place-items: center;
   width: 32px;
@@ -2101,6 +2140,7 @@ kbd {
   flex: none;
 }
 .note-card-body {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -2277,40 +2317,7 @@ kbd {
   box-shadow: none;
 }
 
-/* ─── Status bar ─────────────────────────────────────────────── */
-.editor-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  height: 28px;
-  flex: none;
-  padding: 0 10px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--faint);
-}
-.editor-status > div {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.editor-status button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 5px;
-  color: var(--faint);
-}
-.editor-status button:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.sync-status.error {
-  color: #e5484d;
-}
+/* ─── Theme switch ───────────────────────────────────────────── */
 .theme-flip .moon,
 [data-theme="dark"] .theme-flip .sun {
   display: none;
@@ -2870,13 +2877,8 @@ kbd {
 /* ─── Focus & collapsed states ───────────────────────────────── */
 .focus-mode .sidebar,
 .focus-mode .details-panel,
-.focus-mode .tabs-row .tabs > :not(.sidebar-reopen),
-.focus-mode .editor-status {
+.focus-mode .tabs-row .tabs > :not(.sidebar-reopen) {
   display: none;
-}
-.focus-mode .tabs-row {
-  background: var(--bg);
-  border-bottom-color: transparent;
 }
 .focus-mode .document-content {
   max-width: 760px;
@@ -2904,7 +2906,7 @@ kbd {
     font-size: 34px;
   }
 }
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .details-panel {
     display: none;
   }
@@ -3028,9 +3030,25 @@ kbd {
     overflow-y: auto;
   }
   .tabs-row,
-  .document-toolbar,
-  .editor-status {
+  .document-toolbar {
     display: none;
+  }
+  .app {
+    background: var(--bg);
+  }
+  .sidebar {
+    background: var(--canvas);
+  }
+  .workspace,
+  .sidebar-hidden .workspace,
+  .focus-mode .workspace {
+    padding: 0;
+  }
+  .document-pane,
+  .collection-page,
+  .graph-page {
+    border-radius: 0;
+    box-shadow: none;
   }
   .document-content {
     padding: 36px 22px 120px;
@@ -3230,4 +3248,79 @@ kbd {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ─── Page fonts (Craft's document styles) ───────────────────── */
+.page-font-serif .note-title,
+.page-font-serif .prose,
+.page-font-serif .source-editor,
+.page-font-serif .source-tint,
+.page-font-serif .empty-page p {
+  font-family: "Newsreader Variable", Georgia, "Times New Roman", serif;
+}
+.page-font-serif .note-title {
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.page-font-serif .prose,
+.page-font-serif .source-editor,
+.page-font-serif .source-tint {
+  line-height: 1.65;
+}
+.page-font-serif .prose h1,
+.page-font-serif .prose h2,
+.page-font-serif .prose h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.page-font-mono .note-title,
+.page-font-mono .prose,
+.page-font-mono .source-editor,
+.page-font-mono .source-tint {
+  font-family: var(--font-mono);
+}
+.page-font-mono .note-title {
+  letter-spacing: -0.04em;
+}
+.font-options {
+  display: flex;
+  gap: 8px;
+}
+.font-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 68px;
+  height: 64px;
+  border-radius: var(--radius-lg);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  transition:
+    box-shadow 0.12s ease,
+    color 0.12s ease;
+}
+.font-option span {
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--text);
+}
+.font-option.font-serif span {
+  font-family: "Newsreader Variable", Georgia, serif;
+}
+.font-option.font-mono span {
+  font-family: var(--font-mono);
+  font-size: 19px;
+}
+.font-option:hover {
+  box-shadow: inset 0 0 0 1px var(--faint);
+}
+.font-option.selected {
+  color: var(--accent-text);
+  box-shadow:
+    inset 0 0 0 2px var(--accent),
+    0 0 0 3px var(--accent-soft);
 }

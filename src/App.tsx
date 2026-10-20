@@ -66,6 +66,7 @@ import { seed } from "./seed";
 import { useVault } from "./useVault";
 import Graph from "./Graph";
 import SettingsPanel from "./SettingsPanel";
+import MarkdownSource from "./MarkdownSource";
 import { covers, coverKeys, coverStyle, emojis, randomCover } from "./covers";
 import {
   BrandMark,
@@ -146,6 +147,9 @@ export default function App() {
   const [accent, setAccent] = useState(
     () => localStorage.getItem(ACCENT_KEY) || "violet",
   );
+  const [pageFont, setPageFont] = useState(
+    () => localStorage.getItem("bedrock-page-font") || "sans",
+  );
   const [newTag, setNewTag] = useState("");
   const [zoom, setZoom] = useState(1);
   const [now, setNow] = useState(Date.now());
@@ -193,7 +197,8 @@ export default function App() {
     localStorage.setItem("bedrock-readable", String(readableWidth));
     localStorage.setItem("bedrock-fontsize", String(fontSize));
     localStorage.setItem("bedrock-spellcheck", String(spellcheck));
-  }, [readableWidth, fontSize, spellcheck]);
+    localStorage.setItem("bedrock-page-font", pageFont);
+  }, [readableWidth, fontSize, spellcheck, pageFont]);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(timer);
@@ -457,6 +462,12 @@ export default function App() {
       },
     },
     {
+      title: "Help: Show keyboard shortcuts",
+      hint: "",
+      icon: <CircleHelp size={16} />,
+      run: () => setModal("help"),
+    },
+    {
       title: "Toggle dark mode",
       hint: "",
       icon: <Moon size={16} />,
@@ -641,7 +652,7 @@ export default function App() {
     setView("note");
     setRightPanel(true);
     setPanelMode(mode);
-    setMobilePanel(window.innerWidth <= 900);
+    setMobilePanel(window.innerWidth <= 1100);
   };
   const panelTitle =
     panelMode === "graph"
@@ -769,7 +780,9 @@ export default function App() {
         "app " +
         (focus ? "focus-mode " : "") +
         (sidebarHidden ? "sidebar-hidden " : "") +
-        (!readableWidth ? "wide-editor" : "")
+        (!readableWidth ? "wide-editor " : "") +
+        "page-font-" +
+        pageFont
       }
       style={{ "--editor-font-size": `${fontSize}px` } as React.CSSProperties}
     >
@@ -790,6 +803,14 @@ export default function App() {
             <span className="vault-name">Bedrock</span>
             <ChevronsUpDown size={13} />
           </button>
+          <IconButton
+            label="Switch color scheme"
+            className="theme-flip"
+            onClick={() => setTheme(isDark() ? "light" : "dark")}
+          >
+            <Sun size={15} className="sun" />
+            <Moon size={15} className="moon" />
+          </IconButton>
           <IconButton label="Collapse sidebar" onClick={toggleSidebar}>
             <PanelLeft size={16} />
           </IconButton>
@@ -833,14 +854,6 @@ export default function App() {
           >
             <Network size={16} />
             <span>Graph view</span>
-          </button>
-          <button
-            className="nav-row"
-            aria-label="Import Markdown files"
-            onClick={() => importer.current?.click()}
-          >
-            <Upload size={16} />
-            <span>Import</span>
           </button>
         </nav>
         <div className="sidebar-header" role="tablist" aria-label="Sidebar">
@@ -1063,27 +1076,32 @@ export default function App() {
           )}
         </div>
         <div className="sidebar-footer">
-          <button
-            className="account-chip"
-            title={syncLabel}
-            onClick={() => setModal(user ? "settings" : "auth")}
-          >
+          <div className="account">
             <span className="avatar" aria-hidden="true">
               {(user?.name || "G").slice(0, 1).toUpperCase()}
             </span>
-            <span className="account-text">
+            <div className="account-text">
               <strong>{user ? user.name : "Guest vault"}</strong>
-              <small>{user ? syncLabel : "Sign in to sync"}</small>
-            </span>
-          </button>
+              <button
+                className={
+                  "sync-status " + (syncStatus === "error" ? "error" : "")
+                }
+                title={vault.error || syncLabel}
+                onClick={() => {
+                  if (!user) setModal("auth");
+                  else vault.retrySync();
+                }}
+              >
+                {syncIcon}
+                <span>{syncLabel}</span>
+              </button>
+            </div>
+          </div>
           <IconButton
             label="Sync"
             onClick={() => setModal(user ? "settings" : "auth")}
           >
             <Cloud size={15} />
-          </IconButton>
-          <IconButton label="Help" onClick={() => setModal("help")}>
-            <CircleHelp size={15} />
           </IconButton>
           <IconButton label="Settings" onClick={() => setModal("settings")}>
             <Settings size={15} />
@@ -1194,7 +1212,7 @@ export default function App() {
               label="Toggle details panel"
               active={rightPanel}
               onClick={() => {
-                if (window.innerWidth <= 900) openDetails(panelMode);
+                if (window.innerWidth <= 1100) openDetails(panelMode);
                 else setRightPanel((v) => !v);
               }}
             >
@@ -1412,109 +1430,68 @@ export default function App() {
                           update({ title: "Untitled note" });
                       }}
                     />
-                    <div className="properties" aria-label="Properties">
-                      <div className="property">
-                        <span className="property-name">
-                          <FolderOpen size={14} />
-                          Folder
-                        </span>
-                        <span className="property-value">
-                          <select
-                            aria-label="Folder"
-                            className="folder-select"
-                            value={note.folder}
-                            onChange={(e) => update({ folder: e.target.value })}
-                          >
-                            {allFolders.map((f) => (
-                              <option key={f}>{f}</option>
-                            ))}
-                          </select>
-                        </span>
-                      </div>
-                      <div className="property">
-                        <span className="property-name">
-                          <Hash size={14} />
-                          Tags
-                        </span>
-                        <div className="property-value note-tags">
-                          {note.tags.map((tag) => (
-                            <span className="tag-chip" key={tag}>
-                              <button onClick={() => showCollection("#" + tag)}>
-                                <span>#</span>
-                                {tag}
-                              </button>
-                              <button
-                                className="tag-remove"
-                                aria-label={"Remove tag " + tag}
-                                onClick={() =>
-                                  update({
-                                    tags: note.tags.filter((t) => t !== tag),
-                                  })
-                                }
-                              >
-                                <X size={11} />
-                              </button>
-                            </span>
+                    <div className="page-meta" aria-label="Properties">
+                      <label className="meta-folder" title="Move to folder">
+                        <FolderOpen size={13} />
+                        <select
+                          aria-label="Folder"
+                          value={note.folder}
+                          onChange={(e) => update({ folder: e.target.value })}
+                        >
+                          {allFolders.map((f) => (
+                            <option key={f}>{f}</option>
                           ))}
-                          <form
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              const t = newTag.trim().replace(/^#/, "");
-                              if (t && !note.tags.includes(t))
-                                update({ tags: [...note.tags, t] });
-                              setNewTag("");
-                            }}
-                          >
-                            <Plus size={12} />
-                            <input
-                              aria-label="Add tag"
-                              maxLength={64}
-                              placeholder="Add tag"
-                              value={newTag}
-                              onChange={(e) => setNewTag(e.target.value)}
-                            />
-                          </form>
-                        </div>
-                      </div>
-                      <div className="property">
-                        <span className="property-name">
-                          <Clock3 size={14} />
-                          Updated
-                        </span>
-                        <span className="property-value muted">
-                          {editedLabel(note.updatedAt, now)}
-                        </span>
-                      </div>
-                      <div className="property">
-                        <span className="property-name">
-                          <Link2 size={14} />
-                          Linked from
-                        </span>
-                        <span className="property-value">
-                          {backlinks.length ? (
-                            backlinks.slice(0, 3).map((n) => (
-                              <button
-                                key={n.id}
-                                className="mention-chip"
-                                onClick={() => openNote(n.id)}
-                              >
-                                <NoteIcon note={n} size={12} />
-                                {n.title}
-                              </button>
-                            ))
-                          ) : (
-                            <span className="muted">No backlinks yet</span>
-                          )}
-                          {backlinks.length > 3 && (
-                            <button
-                              className="mention-more"
-                              onClick={() => openDetails("backlinks")}
-                            >
-                              +{backlinks.length - 3}
+                        </select>
+                      </label>
+                      <div className="note-tags">
+                        {note.tags.map((tag) => (
+                          <span className="tag-chip" key={tag}>
+                            <button onClick={() => showCollection("#" + tag)}>
+                              <span>#</span>
+                              {tag}
                             </button>
-                          )}
-                        </span>
+                            <button
+                              className="tag-remove"
+                              aria-label={"Remove tag " + tag}
+                              onClick={() =>
+                                update({
+                                  tags: note.tags.filter((t) => t !== tag),
+                                })
+                              }
+                            >
+                              <X size={10} />
+                            </button>
+                          </span>
+                        ))}
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const t = newTag.trim().replace(/^#/, "");
+                            if (t && !note.tags.includes(t))
+                              update({ tags: [...note.tags, t] });
+                            setNewTag("");
+                          }}
+                        >
+                          <Hash size={12} />
+                          <input
+                            aria-label="Add tag"
+                            maxLength={64}
+                            placeholder="Add tag"
+                            value={newTag}
+                            onChange={(e) => setNewTag(e.target.value)}
+                          />
+                        </form>
                       </div>
+                      {backlinks.length > 0 && (
+                        <button
+                          className="meta-backlinks"
+                          onClick={() => openDetails("backlinks")}
+                        >
+                          <Link2 size={13} />
+                          {backlinks.length}{" "}
+                          {backlinks.length === 1 ? "backlink" : "backlinks"}
+                        </button>
+                      )}
                     </div>
                     {editing ? (
                       <div className="markdown-editor">
@@ -1546,7 +1523,7 @@ export default function App() {
                             <Link2 size={15} />
                           </IconButton>
                         </div>
-                        <textarea
+                        <MarkdownSource
                           ref={editor}
                           className="source-editor"
                           aria-label="Note content"
@@ -2111,47 +2088,6 @@ export default function App() {
             </section>
           )}
         </div>
-        <footer className="editor-status">
-          <button
-            className={"sync-status " + (syncStatus === "error" ? "error" : "")}
-            title={vault.error || syncLabel}
-            onClick={() => {
-              if (!user) setModal("auth");
-              else vault.retrySync();
-            }}
-          >
-            {syncIcon}
-            <span>{syncLabel}</span>
-          </button>
-          <div>
-            {note && view === "note" && (
-              <>
-                <button
-                  onClick={() => {
-                    openDetails("backlinks");
-                  }}
-                >
-                  {backlinks.length}{" "}
-                  {backlinks.length === 1 ? "backlink" : "backlinks"}
-                </button>
-                <span>
-                  {note.content.trim().split(/\s+/).filter(Boolean).length}{" "}
-                  words
-                </span>
-                <span>{note.content.length} characters</span>
-              </>
-            )}
-            <button
-              className="theme-flip"
-              aria-label="Switch color scheme"
-              title="Switch color scheme"
-              onClick={() => setTheme(isDark() ? "light" : "dark")}
-            >
-              <Sun size={13} className="sun" />
-              <Moon size={13} className="moon" />
-            </button>
-          </div>
-        </footer>
         <nav className="mobile-navigation">
           <button
             aria-label="Navigate back"
@@ -2556,6 +2492,8 @@ export default function App() {
             onTheme={setTheme}
             accent={accent}
             onAccent={setAccent}
+            pageFont={pageFont}
+            onPageFont={setPageFont}
             user={user}
             syncLabel={syncLabel}
             onSignIn={() => {

@@ -247,6 +247,8 @@ test("settings apply and persist theme and editor preferences", async ({
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await settings.getByRole("radio", { name: "Green", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-accent", "green");
+  await settings.getByRole("radio", { name: "Serif" }).click();
+  await expect(page.locator(".app")).toHaveClass(/page-font-serif/);
   await settings
     .locator(".settings-nav")
     .getByRole("button", { name: "Editor", exact: true })
@@ -279,6 +281,7 @@ test("settings apply and persist theme and editor preferences", async ({
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.locator("html")).toHaveAttribute("data-accent", "green");
+  await expect(page.locator(".app")).toHaveClass(/page-font-serif/);
   await page
     .locator(".sidebar")
     .getByRole("button", { name: "Settings", exact: true })
